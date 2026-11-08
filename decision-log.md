@@ -18,6 +18,7 @@ This document tracks all significant product, architectural, technical, and engi
 - [ADR-008: Decoupled Mock Billing Adapter Architecture](#adr-008-decoupled-mock-billing-adapter-architecture)
 - [ADR-009: Strict Offline-First Local Storage via Synchronous SQLite](#adr-009-strict-offline-first-local-storage-via-synchronous-sqlite)
 - [ADR-010: SDK 58 Dependency Closure, Peer Direct Linking & Toolchain Alignment](#adr-010-sdk-58-dependency-closure-peer-direct-linking--toolchain-alignment)
+- [ADR-011: Pure Domain Segregation, Root SheetHost & Ephemeral State Architecture](#adr-011-pure-domain-segregation-root-sheethost--ephemeral-state-architecture)
 
 ---
 
@@ -171,3 +172,25 @@ This document tracks all significant product, architectural, technical, and engi
   - `npx expo-doctor` passes all 20 checks with zero failures.
   - `npx expo install --check` reports `Dependencies are up to date`.
   - Android prebuild generates `com.emberrest.app` targeting Android 15 (API 36) with compile SDK 37 and minSdk 24 (Android 7.0+).
+
+---
+
+## Phase 1: Foundation, Design System & Pure Domain Logic
+
+### ADR-011: Pure Domain Segregation, Root SheetHost & Ephemeral State Architecture
+
+- **Date:** 2026-11-08
+- **Status:** Accepted
+- **Context:** Ember's core habit psychology, streak mathematics, session progression, in-flight narrator switching, and Calm Delta insights must be deterministic, mathematically rigorous, and testable without UI frameworks or physical devices. Furthermore, modal sheets (Journey, Paywall, Voice Picker) must open smoothly above both routes (`/` Sanctuary and `/player` Player).
+- **Decision:**
+  1. **Strict Pure Domain Isolation:** Segregated all business logic (`src/domain/`) with zero imports of React, React Native, Expo, or SQLite.
+  2. **Pure Reducer Session Machine:** Modeled the session lifecycle in `src/domain/sessionMachine.ts` as a deterministic reducer (`reduceSession(state, event) => { state, effects[] }`). The reducer calculates commit thresholds (90% Focus, 85% Sleep), Free Pass 20% consumption, cubic ambient Sleep fade, and in-flight voice switching without side effects.
+  3. **Root SheetHost Pattern:** Created `src/providers/SheetHost.tsx` mounted at root level inside `app/_layout.tsx` above Expo Router's `<Stack>`, controlled by ephemeral `useSheetStore`.
+  4. **Strict Ephemeral State in Zustand:** Zustand is restricted strictly to ephemeral UI state (`useSheetStore` for sheet visibility and `useSessionStore` for active playback timers). All persistent data (sessions, ledger, streaks, preferences, entitlements) will be managed via SQLite repositories.
+  5. **Centralized Design System:** Implemented `src/design/tokens.ts` (OLED black `#000000`, Candlelight Amber `#F59E0B`, Soft Gold `#FBBF24`, Fraunces Light 300, Inter typography, 48 dp min touch targets) and preference-guarded haptics in `src/design/haptics.ts`.
+- **Rationale:**
+  - Pure domain functions can be thoroughly tested across edge cases (leap years, DST transitions, clock rollbacks, quiet-hour clamping) in milliseconds on Node without mocking React components or SQLite databases.
+  - Root-level sheet hosting prevents navigation nesting bugs and ensures paywalls and voice pickers can overlay active sessions without unmounting the underlying player view.
+- **Architectural Impact:**
+  - 100% of domain rules verified with 53 unit tests passing in both `Asia/Kolkata` (IST) and `America/New_York` (EST).
+  - Clean separation of concerns: UI views read Zustand stores, domain logic executes pure reducers, and database repositories handle persistence.
