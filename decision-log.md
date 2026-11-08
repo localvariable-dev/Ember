@@ -32,6 +32,7 @@ This document tracks all significant product, architectural, technical, and engi
 - [ADR-022: React 19 State Lifecycle Stabilization, Hook Memoization & Update Depth Guarding](#adr-022-react-19-state-lifecycle-stabilization-hook-memoization--update-depth-guarding)
 - [ADR-023: Decoupled Monetisation Architecture, Billing Abstraction & Offline Entitlement Reconciliation](#adr-023-decoupled-monetisation-architecture-billing-abstraction--offline-entitlement-reconciliation)
 - [ADR-024: CI Release Signing Configuration & Kotlin Inline Module Property Isolation](#adr-024-ci-release-signing-configuration--kotlin-inline-module-property-isolation)
+- [ADR-025: Keystore Validation & Non-Silent Testing Build Debug Signing Fallback](#adr-025-keystore-validation--non-silent-testing-build-debug-signing-fallback)
 
 ---
 
@@ -756,3 +757,37 @@ This document tracks all significant product, architectural, technical, and engi
 - **Architectural Impact:**
   - Eliminates the `:expo:generateInlineModules` failure in GitHub Actions.
   - Preserves production release signing integrity and all 29 Jest test suites / 243 tests.
+
+---
+
+### ADR-025: Keystore Validation & Non-Silent Testing Build Debug Signing Fallback
+
+- **Date:** 2026-11-09
+- **Status:** Accepted
+- **Context:**
+  - In CI, the Android build progressed through 639 Gradle tasks to `:app:packageRelease` before failing:
+    ```text
+    KeytoolException: Failed to read key from store
+    Tag number over 30 is not supported
+    Keystore: android/app/release.keystore
+    ```
+  - Java's `KeytoolException: Tag number over 30 is not supported` indicates an ASN.1 DER parser failure caused by invalid, corrupted, or non-PKCS12/JKS byte sequences in the decoded keystore.
+  - The previous CI workflow unconditionally configured `EMBER_RELEASE_STORE_FILE=release.keystore` whenever `github.ref == 'refs/heads/main'`, without validating whether `android/app/release.keystore` was a valid, readable keystore matching the provided credentials.
+  - The user required a working, installable APK for personal device testing while preserving the production signing path for future Play Store releases without silently downgrading production builds.
+- **Decision:**
+  1. Updated `.github/workflows/build-apk.yml` to validate the decoded keystore using `keytool -list -keystore ... -storepass ... -alias ... > /dev/null 2>&1` prior to configuring release signing.
+  2. If keystore validation fails or credentials are missing:
+     - The corrupt/empty `release.keystore` file is removed immediately.
+     - If `REQUIRE_PRODUCTION_SIGNING == 'true'`, the build fails explicitly with an error (preventing silent downgrades of production releases).
+     - Otherwise, the workflow falls back cleanly to the existing debug signing mechanism in `plugins/withReleaseSigning.ts`, emitting a prominent GitHub Actions warning (`::warning::...`).
+  3. Clearly differentiated testing builds:
+     - Testing APK is explicitly named `ember-testing-debug-signed.apk` and uploaded under artifact name `ember-testing-apk`.
+     - Production APK remains uploaded under `ember-release-apk` with `SIGNING_MODE=release`.
+     - Step summaries in GitHub Actions clearly identify the signing mode and warn that testing builds are not for Play Store release.
+- **Rationale:**
+  - Completely eliminates unhandled `KeytoolException` crashes during packaging.
+  - Protects passwords and private keys: credentials are never echoed or output in CI logs.
+  - Ensures personal testing APKs can be built, verified, and installed immediately on real Android hardware.
+- **Architectural Impact:**
+  - Testing builds produce an installable, minified release APK with debug signature.
+  - Production release signing path is 100% preserved and activated automatically when valid credentials are provided.
