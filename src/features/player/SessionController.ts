@@ -479,6 +479,8 @@ export class SessionController {
     for (const session of inProgress) {
       if (session.committedAtMs != null) continue;
 
+      const progressMs = Math.max(session.listenedMs, session.maxPositionMs);
+
       if (
         session.mode === 'sleep' &&
         session.maxPositionMs >= session.plannedMs * COMMIT_THRESHOLD.sleep
@@ -488,14 +490,14 @@ export class SessionController {
           commitReason: 'sleep_reconcile',
           endedAtMs: now,
           maxPositionMs: session.maxPositionMs,
-          listenedMs: session.listenedMs,
+          listenedMs: progressMs,
         });
         reconciledCount++;
-      } else if (session.listenedMs >= PARTIAL_MIN_LISTENED_MS) {
-        sessionRepo.finalize(session.id, 'partial', session.listenedMs, now);
+      } else if (progressMs >= PARTIAL_MIN_LISTENED_MS) {
+        sessionRepo.finalize(session.id, 'partial', progressMs, now);
         reconciledCount++;
       } else {
-        sessionRepo.finalize(session.id, 'abandoned', session.listenedMs, now);
+        sessionRepo.finalize(session.id, 'abandoned', progressMs, now);
         reconciledCount++;
       }
     }

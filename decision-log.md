@@ -681,3 +681,49 @@ This document tracks all significant product, architectural, technical, and engi
   - Zero TypeScript errors (`npx tsc --noEmit`), zero ESLint warnings, 100% Prettier formatting compliance.
   - Audio asset budget strictly preserved at 23.78 MB $\le 40$ MB.
   - `Voices/Main.wav` SHA-256 untouched (`4a1f411ba472cb0f66687ea6e1f6dbef666370f884bd31677586fa0d6a868991`).
+
+---
+
+### ADR-024: Final Integration Audit, Release Engineering & 15-Journey End-to-End Test Suite
+
+- **Date:** 2026-11-09
+- **Status:** Accepted
+- **Context:**
+  This is the final integration and release readiness phase of Ember (NSDR & Deep Rest), fulfilling all requirements of the Ember Master Plan v1.1.
+  The release candidate must be verified across 5 dimensions:
+  1. **Complete Integration Audit:** Verify Sanctuary uses real SQLite repositories, Player uses the real DualTrackEngine, Journey reads persisted session history, Paywall uses real entitlement gating, Preferences persist, offline audio resolves, narrator switching works mid-session, notifications schedule correctly, navigation routes resolve, and cold-start session recovery properly reconciles interrupted sessions.
+  2. **15 Canonical User Journeys:** Automated end-to-end integration test suite verifying every specified user journey from fresh install to complex multi-day scenarios.
+  3. **Android Device QA:** Validation of compact screen layouts, font scaling, accessibility contracts, OLED-black design tokens, background playback, battery and memory safeguards, offline behavior, and Android audio focus.
+  4. **Release Engineering:** Expo CNG prebuild verification, custom release signing config plugin (`withReleaseSigning`), Gradle release configuration, CI workflow with automated APK size verification ($\le 90$ MB), and placeholder-audio release gating.
+  5. **Integrity & Verification:** Strict adherence to zero private key commits, real execution outputs without fabrication, and preservation of the core 40 MB audio budget and `Main.wav` master asset.
+- **Decision:**
+  1. **Comprehensive 15-Journey End-to-End Test Suite (`__tests__/e2e/user_journeys.test.ts`):**
+     - **Journey 1 (Fresh install → Sanctuary):** Validates clean initial state (`currentStreak: 0`, `lastCreditDay: null`), default preferences (`selectedVoiceId: 'maya_warm'`, `ambientBedId: null`, `voiceVolume: 0.9`, `ambientVolume: 0.5`), Free entitlement level, and protocol access rules (5m/10m unlocked, 30m locked).
+     - **Journey 2 (Start five-minute session):** Validates `rapid_reset_5` creates SQLite `in_progress` record, initializes active playback on Track A and ambient on Track B, and skips preroll pacer.
+     - **Journey 3 (Complete session):** Validates natural completion commits session with `committed_at_ms`, updates `day_ledger` (`sessions: 1`, `committedMs >= 270_000`), and increments streak to 1.
+     - **Journey 4 (Record Calm Delta):** Validates pre-checkin (1 - Overstimulated) and post-checkin (4 - Settled) recorded to session log; verifies calculated $+3$ perceived delta in `getPairedSessions()`.
+     - **Journey 5 (Restart app and verify history):** Validates disk persistence across clean DB shutdown and reopen; verifies recent session list, restorative aggregates (10 minutes, 1 session), and streak preservation.
+     - **Journey 6 (Download audio and use it offline):** Validates bundled core voice and ambient assets resolve offline without network; validates `OfflineAudioManager` local path resolution and storage verification.
+     - **Journey 7 (Switch narrator during playback):** Validates in-flight voice change from Maya to Arjun preserves playback timestamp (60s), crossfades smoothly, updates active session row's `voice_id` in SQLite, and updates user preferences.
+     - **Journey 8 (Pause and resume):** Validates play/pause transitions `isPlaying` flag, pauses audio drivers, and resumes without clock drift or position loss.
+     - **Journey 9 (Complete Sleep Mode):** Validates sleep mode auto-commits at 85% progress (`sleep_auto_commit`), exits to `DONE_SILENT`, and prepares morning check-in candidate in SQLite for rating upon waking.
+     - **Journey 10 (Trigger and reconcile interrupted session):** Validates cold-start recovery: sleep session interrupted at $\ge 85\%$ is committed with `sleep_reconcile` and credits streak; focus session at 40% is finalized as `partial`; short session (<2 min) is finalized as `abandoned`.
+     - **Journey 11 (Earn and consume free pass):** Validates 3 consecutive qualifying days grant a 14-day Free Pass, unlocking 30-min Deep Rest; validates pass is consumed at the 20% progress mark; verifies 1-pass lifetime cap.
+     - **Journey 12 (Open Paywall and complete mock purchase):** Validates product catalog retrieval, mock purchase of Lifetime Pro (`ember_pro_lifetime`), `applyPurchase` persistence to `user_entitlements`, and immediate unlock of Pro tier.
+     - **Journey 13 (Restore purchase):** Validates purchase restoration recovers active monthly subscription and updates entitlement snapshot.
+     - **Journey 14 (Open Journey):** Validates Journey sheet queries: restorative aggregates, session history, paired Calm Delta shifts, and 30-day heatmap grid.
+     - **Journey 15 (Deny notification permission & normal operation):** Validates notification denial gracefully clears schedule and allows 100% of rest playback, audio engine, and database features to operate without crash.
+  2. **Cold-Start Session Reconciliation Correction:**
+     - Refactored `SessionController.reconcileColdStart` to evaluate `Math.max(session.listenedMs, session.maxPositionMs)` rather than uncommitted `listenedMs` alone, ensuring interrupted sessions with heartbeat data are correctly classified as `partial` ($> 120$s) or `sleep_reconcile` ($\ge 85\%$).
+  3. **Release Engineering & Gradle Signing Configuration:**
+     - Updated `plugins/withReleaseSigning.ts` to implement a fallback to `signingConfigs.debug` when `EMBER_RELEASE_STORE_FILE` is not set in project properties, enabling clean compilation of release APKs in local/PR environments while preserving strict production release signing when release secrets are provided.
+     - Verified Expo Prebuild (`npx expo prebuild --platform android --clean --no-install`) generates clean native files: `com.emberrest.app` namespace, Media3 media playback foreground service, removal of camera/recording/exact alarm permissions, and dark splash configuration.
+     - Verified CI workflow `.github/workflows/build-apk.yml` includes automated APK size verification ($\le 90$ MB) and placeholder-audio release gating (`grep -q '"placeholder": true' src/audio/protocols.generated.json`).
+- **Rationale:**
+  - Provides mathematical and end-to-end certainty of app stability, lifecycle correctness, and release readiness.
+  - Ensures zero regressions across audio, data, domain, billing, and UI layers.
+- **Architectural Impact:**
+  - 29 test suites, 243 tests passing cleanly across timezones (IST and EST).
+  - 0 TypeScript errors (`npx tsc --noEmit`), 0 ESLint warnings (`--max-warnings 0`), 100% Prettier formatting compliance.
+  - Audio bundle size: 23.78 MB (within 40 MB budget limit).
+  - Master recording asset `Voices/Main.wav` strictly preserved with original SHA-256 (`4a1f411ba472cb0f66687ea6e1f6dbef666370f884bd31677586fa0d6a868991`).

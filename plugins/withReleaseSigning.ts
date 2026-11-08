@@ -17,7 +17,11 @@ android {
     }
     buildTypes {
         release {
-            signingConfig signingConfigs.release
+            if (project.hasProperty('EMBER_RELEASE_STORE_FILE')) {
+                signingConfig signingConfigs.release
+            } else {
+                signingConfig signingConfigs.debug
+            }
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
