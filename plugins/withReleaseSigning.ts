@@ -7,7 +7,7 @@ const withReleaseSigning: ConfigPlugin = (config) => {
 android {
     signingConfigs {
         release {
-            if (project.hasProperty('EMBER_RELEASE_STORE_FILE')) {
+            if (project.hasProperty('EMBER_RELEASE_STORE_FILE') && file(EMBER_RELEASE_STORE_FILE).exists()) {
                 storeFile file(EMBER_RELEASE_STORE_FILE)
                 storePassword EMBER_RELEASE_STORE_PASSWORD
                 keyAlias EMBER_RELEASE_KEY_ALIAS
@@ -17,7 +17,7 @@ android {
     }
     buildTypes {
         release {
-            if (project.hasProperty('EMBER_RELEASE_STORE_FILE')) {
+            if (project.hasProperty('EMBER_RELEASE_STORE_FILE') && file(EMBER_RELEASE_STORE_FILE).exists()) {
                 signingConfig signingConfigs.release
             } else {
                 signingConfig signingConfigs.debug

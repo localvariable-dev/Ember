@@ -31,6 +31,7 @@ This document tracks all significant product, architectural, technical, and engi
 - [ADR-021: Journey, Retention Architecture & Gentle Local Notification Scheduling](#adr-021-journey-retention-architecture--gentle-local-notification-scheduling)
 - [ADR-022: React 19 State Lifecycle Stabilization, Hook Memoization & Update Depth Guarding](#adr-022-react-19-state-lifecycle-stabilization-hook-memoization--update-depth-guarding)
 - [ADR-023: Decoupled Monetisation Architecture, Billing Abstraction & Offline Entitlement Reconciliation](#adr-023-decoupled-monetisation-architecture-billing-abstraction--offline-entitlement-reconciliation)
+- [ADR-024: CI Release Signing Configuration & Kotlin Inline Module Property Isolation](#adr-024-ci-release-signing-configuration--kotlin-inline-module-property-isolation)
 
 ---
 
@@ -727,3 +728,31 @@ This document tracks all significant product, architectural, technical, and engi
   - 0 TypeScript errors (`npx tsc --noEmit`), 0 ESLint warnings (`--max-warnings 0`), 100% Prettier formatting compliance.
   - Audio bundle size: 23.78 MB (within 40 MB budget limit).
   - Master recording asset `Voices/Main.wav` strictly preserved with original SHA-256 (`4a1f411ba472cb0f66687ea6e1f6dbef666370f884bd31677586fa0d6a868991`).
+
+---
+
+### ADR-024: CI Release Signing Configuration & Kotlin Inline Module Property Isolation
+
+- **Date:** 2026-11-09
+- **Status:** Accepted
+- **Context:**
+  - In CI, the release APK build failed at `:expo:generateInlineModules`:
+    ```text
+    > Task :expo:generateInlineModules FAILED
+    at mirrorKotlinInlineModulesCommand.js:40:41
+    Execution failed for task ':expo:generateInlineModules'.
+    > Process 'command node' finished with non-zero exit value 1
+    ```
+  - Traced the root cause to `@expo/config-plugins` `Properties.propertiesListToString(props)` which outputs properties delimited by newlines without a trailing newline character.
+  - During `expo prebuild`, `@expo/prebuild-config` appends `expo.inlineModules.watchedDirectories=[]` as the final line of `android/gradle.properties` without a trailing `\n`.
+  - In `.github/workflows/build-apk.yml`, the release signing step previously used `cat >> android/gradle.properties <<EOF` with indented lines. Because the preceding file content lacked a trailing newline, the first appended line was concatenated directly to `expo.inlineModules.watchedDirectories=[]`, yielding `expo.inlineModules.watchedDirectories=[]          EMBER_RELEASE_STORE_FILE=release.keystore`.
+  - Gradle subsequently passed this unparsed string to `GenerateInlineModulesTask.kt`, where Node's `mirrorKotlinInlineModulesCommand.js:40:41` failed on `JSON.parse(watchedDirectoriesSerialized)` with `SyntaxError: Unexpected non-whitespace character after JSON`.
+- **Decision:**
+  1. Updated `.github/workflows/build-apk.yml` to inject signing secrets via step `env:` environment variables and append to `android/gradle.properties` via `printf '\nEMBER_RELEASE_STORE_FILE=release.keystore\n...'`, guaranteeing a preceding newline and eliminating shell interpolation and property concatenation risks.
+  2. Hardened `plugins/withReleaseSigning.ts` to check both `project.hasProperty('EMBER_RELEASE_STORE_FILE')` and `file(EMBER_RELEASE_STORE_FILE).exists()`, ensuring release builds cleanly fall back to debug signing if keystore secrets are missing (e.g. in PR workflows).
+- **Rationale:**
+  - Addresses the exact mechanical defect without disabling inline modules or modifying Expo/React Native versions.
+  - Guarantees valid JSON for Kotlin inline module autolinking across all build configurations.
+- **Architectural Impact:**
+  - Eliminates the `:expo:generateInlineModules` failure in GitHub Actions.
+  - Preserves production release signing integrity and all 29 Jest test suites / 243 tests.
