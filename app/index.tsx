@@ -1,7 +1,7 @@
 /**
  * Sanctuary Screen (Route: "/")
- * Master Plan Part 1 §2.3
- * 2-tap entry into rest. Complete responsive layout with sticky CTA and SQLite persistence.
+ * Master Plan Part 1 §2.3 & Part 6 §7.2
+ * Clean, distraction-free home surface for initiating deep rest.
  */
 
 import React, { useMemo, useState } from 'react';
@@ -9,13 +9,13 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing } from '../src/design/tokens';
-import { hapticCardSelect, hapticLockedCardTap } from '../src/design/haptics';
-import { getTimeContext } from '../src/domain/timeOfDay';
 import type { ProtocolId } from '../src/domain/constants';
-import type { Mode } from '../src/data/types';
+import { getTimeContext } from '../src/domain/timeOfDay';
+import type { Mode, RecoveryState } from '../src/data/types';
 import { useDatabase } from '../src/providers/DatabaseProvider';
-import { useSheetStore } from '../src/stores/useSheetStore';
 import { useSessionStore } from '../src/stores/useSessionStore';
+import { useSheetStore } from '../src/stores/useSheetStore';
+
 import { TopBar } from '../src/features/sanctuary/TopBar';
 import { GreetingBlock } from '../src/features/sanctuary/GreetingBlock';
 import { SessionCardList } from '../src/features/sanctuary/SessionCardList';
@@ -23,43 +23,58 @@ import { ModeToggle } from '../src/features/sanctuary/ModeToggle';
 import { AmbientChips } from '../src/features/sanctuary/AmbientChips';
 import { VoiceAndPacerRow } from '../src/features/sanctuary/VoiceAndPacerRow';
 import { BeginRestButton } from '../src/features/sanctuary/BeginRestButton';
+import { MorningCheckInCard } from '../src/features/player/MorningCheckInCard';
+import { useSessionController } from '../src/features/player/SessionProvider';
 
 export default function SanctuaryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const controller = useSessionController();
   const [now] = useState(() => Date.now());
-  const timeContext = useMemo(() => getTimeContext(new Date(now)), [now]);
 
-  const { preferences, updatePreferences, isPro, activePass } = useDatabase();
+  const { sessionRepo, preferences, updatePreferences, isPro, activePass } = useDatabase();
+
   const openSheet = useSheetStore((state) => state.openSheet);
   const { resetSession, setProtocol, setMode, setVoice, setAmbientBed, setSigh } =
     useSessionStore();
 
-  // Selected session protocol
-  const [selectedProtocolId, setSelectedProtocolId] = useState<ProtocolId>(timeContext.protocolId);
-
-  // Selected mode (Focus / Sleep)
-  const [currentMode, setCurrentMode] = useState<Mode>(
-    preferences.lastMode ?? (timeContext.greeting === 'Good evening' ? 'sleep' : 'focus'),
+  const [selectedProtocolId, setSelectedProtocolId] = useState<ProtocolId>(
+    () => getTimeContext(new Date(now)).protocolId,
   );
+  const [currentMode, setCurrentMode] = useState<Mode>(preferences.lastMode ?? 'focus');
+  const [morningDismissed, setMorningDismissed] = useState(false);
+
+  // Check for candidate Sleep session awaiting morning check-in
+  const morningCandidate = useMemo(() => {
+    if (morningDismissed) return null;
+    return sessionRepo.getMorningCheckinCandidate();
+  }, [sessionRepo, morningDismissed]);
+
+  const handleRateMorning = (sessionId: string, state: RecoveryState) => {
+    sessionRepo.setPostState(sessionId, state);
+    setMorningDismissed(true);
+  };
+
+  const handleDismissMorning = () => {
+    setMorningDismissed(true);
+  };
 
   const hasFreePass = Boolean(activePass && activePass.status === 'available');
   const freePassRemainingDays = activePass?.expiresAtMs
     ? Math.max(0, Math.ceil((activePass.expiresAtMs - now) / 86_400_000))
     : undefined;
 
-  const isCurrentCardLocked = selectedProtocolId === 'deep_rest_30' && !isPro && !hasFreePass;
-
-  const handleSelectCard = (protocolId: ProtocolId) => {
-    setSelectedProtocolId(protocolId);
-
-    const isLocked = protocolId === 'deep_rest_30' && !isPro && !hasFreePass;
-    if (isLocked) {
-      hapticLockedCardTap();
-      openSheet('paywall', { paywallVariant: 'card_tap' });
-    } else {
-      hapticCardSelect();
+  const isCardLocked = (protocolId: ProtocolId) => {
+    if (protocolId === 'deep_rest_30') {
+      return !isPro && !hasFreePass;
     }
+    return false;
+  };
+
+  const isLocked = isCardLocked(selectedProtocolId);
+
+  const handleSelectCard = (id: ProtocolId) => {
+    setSelectedProtocolId(id);
   };
 
   const handleModeChange = (newMode: Mode) => {
@@ -67,13 +82,29 @@ export default function SanctuaryScreen() {
     updatePreferences({ lastMode: newMode });
   };
 
-  const handleBeginRestUnlocked = () => {
+  const handleBeginRestUnlocked = async () => {
     resetSession();
+    const targetMode = selectedProtocolId === 'rapid_reset_5' ? 'focus' : currentMode;
+    const targetSigh =
+      selectedProtocolId === 'rapid_reset_5' ? false : preferences.sighPacerDefault;
+
     setProtocol(selectedProtocolId);
-    setMode(selectedProtocolId === 'rapid_reset_5' ? 'focus' : currentMode);
+    setMode(targetMode);
     setVoice(preferences.selectedVoiceId);
     setAmbientBed(preferences.ambientBedId);
-    setSigh(selectedProtocolId === 'rapid_reset_5' ? true : preferences.sighPacerDefault);
+    setSigh(targetSigh);
+
+    try {
+      await controller.startSession({
+        protocolId: selectedProtocolId,
+        mode: targetMode,
+        voiceId: preferences.selectedVoiceId,
+        ambientBedId: preferences.ambientBedId,
+        sigh: targetSigh,
+      });
+    } catch (err) {
+      console.warn('Failed to start session from Sanctuary:', err);
+    }
 
     router.push('/player');
   };
@@ -94,6 +125,15 @@ export default function SanctuaryScreen() {
       >
         {/* TopBar with Streak Pill */}
         <TopBar />
+
+        {/* Morning-After Check-in Card (if Sleep session awaiting rating within 10h) */}
+        {morningCandidate && (
+          <MorningCheckInCard
+            candidateSession={morningCandidate}
+            onRate={handleRateMorning}
+            onDismiss={handleDismissMorning}
+          />
+        )}
 
         {/* Greeting & Context Line */}
         <GreetingBlock selectedProtocolId={selectedProtocolId} />
@@ -130,7 +170,7 @@ export default function SanctuaryScreen() {
         ]}
       >
         <BeginRestButton
-          isLocked={isCurrentCardLocked}
+          isLocked={isLocked}
           onPressUnlocked={handleBeginRestUnlocked}
           onPressLocked={handleBeginRestLocked}
         />
@@ -149,22 +189,17 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: spacing.screenPaddingHorizontal,
-    paddingTop: spacing.xs,
+    paddingTop: spacing.sm,
   },
   stickyBottomContainer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: colors.bg,
-    borderTopWidth: 1,
-    borderColor: colors.border,
     paddingHorizontal: spacing.screenPaddingHorizontal,
-    paddingTop: spacing.base,
-    shadowColor: colors.bg,
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.9,
-    shadowRadius: 16,
-    elevation: 8,
+    paddingTop: spacing.sm,
+    backgroundColor: 'rgba(0, 0, 0, 0.92)',
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
 });

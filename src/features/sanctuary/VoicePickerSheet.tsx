@@ -10,6 +10,7 @@ import { colors, radii, spacing, typography } from '../../design/tokens';
 import { hapticCardSelect, hapticLockedCardTap } from '../../design/haptics';
 import { useDatabase } from '../../providers/DatabaseProvider';
 import { useSheetStore } from '../../stores/useSheetStore';
+import { getActiveSessionController } from '../player/SessionProvider';
 
 export function VoicePickerSheet() {
   const { preferences, updatePreferences, voiceRepo, isPro } = useDatabase();
@@ -27,6 +28,13 @@ export function VoicePickerSheet() {
 
     hapticCardSelect();
     updatePreferences({ selectedVoiceId: voiceId });
+
+    // In-flight narrator switch if a session is actively playing
+    const activeCtrl = getActiveSessionController();
+    if (activeCtrl && activeCtrl.getActiveSessionId()) {
+      activeCtrl.switchVoice(voiceId);
+    }
+
     closeSheet();
   };
 

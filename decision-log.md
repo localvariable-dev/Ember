@@ -419,3 +419,61 @@ This document tracks all significant product, architectural, technical, and engi
 - **Architectural Impact:**
   - Expanded test suite to 18 test suites and 149 tests passing across all timezones in < 1.4s.
   - Zero TypeScript errors (`npx tsc --noEmit`), zero ESLint warnings (`eslint --max-warnings 0`), 100% Prettier formatting compliance.
+
+---
+
+### ADR-018: Dual-Track Audio Engine, In-Flight Narrator Switching & Complete Player Experience
+
+- **Date:** 2026-11-08
+- **Status:** Accepted
+- **Context:**
+  Phase 5 implements the real offline audio engine and complete Player experience per Master Plan Parts 1 and 5:
+  1. Pure separation between native playback runtime (`expo-audio`) and core business logic via driver abstractions (`AudioDriver`, `ExpoAudioDriver`, `MockAudioDriver`).
+  2. Track A (Voice narration) as the master session clock, driving cue timelines and orbital ring sync. Track B (Ambient soundscape) as timeline slave.
+  3. Mandatory product feature: In-flight narrator switching (`[ Maya ]` / `[ Arjun ]`) during active playback without session restart, position loss, or duplicate speech.
+  4. Perceptual volume tapering ($v^2$) for independent Voice and Ambient sliders.
+  5. Sleep mode specific behavior: silent auto-commit at 85% threshold, pause-safe cubic ambient fade over the final 90 seconds, screen auto-dimming after 20s of inactivity, no chime at completion, and morning-after check-in card on Sanctuary within 10 hours.
+  6. Focus mode ending: 3.2s rising harmonic chime (`chime_rise.wav`), 6s ambient fade, and transition to post-session check-in.
+  7. Non-blocking pre-session check-in (first 20s) and post-session check-in with Calm Delta calculation and streak ember animation.
+- **Decision:**
+  1. **Audio Driver & Engine Abstraction (`src/audio/`):**
+     - Defined `AudioDriver`, `PlayerHandle`, `AudioSource`, and `PlayerStatus` interfaces.
+     - Implemented `ExpoAudioDriver` using SDK 58 `expo-audio` (`createAudioPlayer`, `setAudioModeAsync` with `playsInSilentMode: true`, `shouldPlayInBackground: true`, `interruptionMode: 'doNotMix'`). Native modules are lazily required to preserve Node test runner compatibility.
+     - Implemented deterministic `MockAudioDriver` for high-speed unit and integration testing without native runtime dependencies.
+     - Implemented `DualTrackEngine`: Track A (voice) drives position updates and active cues; Track B (ambient) loops seamlessly. Independent volumes apply perceptual quadratic curve ($V_{\text{taper}} = V^2$).
+  2. **In-Flight Narrator Switching Architecture:**
+     - Tapping the VoiceChip during active playback loads the incoming voice track asynchronously.
+     - The incoming player is seeked directly to `currentPositionMs`, aligning timeline position down to the millisecond.
+     - A 1,500 ms equal-power crossfade is executed:
+       $$\text{gain}_{\text{old}}(t) = \cos\left(\frac{\pi}{2} \cdot \frac{t}{1500}\right) \cdot V_{\text{user}}^2$$
+       $$\text{gain}_{\text{new}}(t) = \sin\left(\frac{\pi}{2} \cdot \frac{t}{1500}\right) \cdot V_{\text{user}}^2$$
+       Total acoustic energy $\text{gain}_{\text{old}}^2 + \text{gain}_{\text{new}}^2 = V_{\text{user}}^4$ remains strictly constant with zero volume dip or boost.
+     - Safe fallback: if the incoming asset fails to load or seek, the engine emits `voice_switch_failed` and leaves the existing narrator playing uninterrupted.
+     - The voice change is atomically committed to SQLite (`session_logs.voice_id = newVoiceId`) via `SessionRepo.updateVoice()` and saved to `user_preferences.selected_voice_id`.
+  3. **Sleep Mode Lifecyle & Ambient Attenuation:**
+     - Silent auto-commit at 85% threshold: session is committed with reason `sleep_auto_commit` and streak is credited immediately without requiring user interaction.
+     - Pause-safe cubic attenuation over the final 90 seconds:
+       $$\text{fadeFactor} = \left(\frac{\text{remainingMs}}{90\,000}\right)^3$$
+       Computed directly from remaining voice track duration, ensuring pausing or seeking preserves the attenuation curve.
+     - Screen auto-dimming: after 20 seconds of inactivity, UI chrome animates to `dimMultiplier` (0.38) opacity over 2,000 ms; any touch restores full opacity in 200 ms.
+     - At track end, audio stops silently and the screen enters `DONE_SILENT`.
+     - `MorningCheckInCard` surfaces on Sanctuary within 10 hours for unrated completed Sleep sessions.
+  4. **Player UI Components (`src/features/player/`):**
+     - `SighPacer`: 60.0s preroll ritual (6 cycles × 10.0s), animated breathing orb, phase-specific haptics (`hapticSighInhale1`, `hapticSighInhale2`, `hapticSighExhalePulse`), cycle counter, and 48dp skip button.
+     - `OrbitalRing`: 280dp ring with SVG hairline track, amber progress arc, breathing orb dynamically scaled to cue breath patterns (`breath`, `sigh`, `body`, `silence`), and 6dp core dot (`accentSoft`).
+     - `CueLabel`: active cue label with 400ms crossfade and `accessibilityLiveRegion="polite"`.
+     - `RemainingTime`: countdown timer, tap toggles visibility (hidden by default in Sleep).
+     - `PreStateStrip`: five 28dp recovery state orbs (Wired, Drained, Neutral, Calm, Restored), non-blocking in first 20s with pulse and 600ms fadeout.
+     - `TransportControls`: 72dp outline circle Play/Pause button with amber stroke and haptic feedback.
+     - `MixerSliders`: Voice slider with mic icon and `[ Maya ]` chip; Ambient slider with wave icon and `[ Bed ]` chip.
+     - `PostCheckIn`: 5 large orbs (56dp) with halo and 700ms auto-advance to summary.
+     - `SessionSummary`: state transition (`Pre → Post`), Calm Delta calculation (+N, 0, −N with neutral non-punitive copy), animated streak ember, and earned reward badges (Grace Day, Free Pass).
+     - `SessionController`: orchestrates `sessionMachine`, `DualTrackEngine`, and SQLite persistence (`SessionRepo`, `PrefsRepo`, `EntitlementRepo`, `StreakRepo`). Includes cold start reconciliation for interrupted sessions.
+- **Rationale:**
+  - Strictly follows Master Plan Parts 1 and 5 specifications.
+  - Zero cloud dependencies or audio streaming: all audio playback is 100% offline and low-latency.
+  - Protects user rest: never blasts audio, pauses on phone calls and headphone disconnects, allows Sleep mode to time out cleanly.
+- **Architectural Impact:**
+  - Expanded test suite to **21 test suites** and **172 tests** passing across all timezones in < 1.3s.
+  - Zero TypeScript errors (`npx tsc --noEmit`), zero ESLint warnings (`eslint --max-warnings 0`), 100% Prettier formatting compliance.
+  - Verified `Voices/Main.wav` SHA-256 completely untouched (`4a1f411ba472cb0f66687ea6e1f6dbef666370f884bd31677586fa0d6a868991`).

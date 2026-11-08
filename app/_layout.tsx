@@ -18,6 +18,7 @@ import {
 } from '@expo-google-fonts/inter';
 import { colors } from '../src/design/tokens';
 import { DatabaseProvider } from '../src/providers/DatabaseProvider';
+import { SessionProvider } from '../src/features/player/SessionProvider';
 import { SheetHost } from '../src/providers/SheetHost';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -46,25 +47,27 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.container}>
       <DatabaseProvider>
-        <StatusBar style="light" />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: colors.bg },
-            animation: 'fade',
-          }}
-        >
-          <Stack.Screen name="index" />
-          <Stack.Screen
-            name="player"
-            options={{
-              presentation: 'fullScreenModal',
-              gestureEnabled: false,
+        <SessionProvider>
+          <StatusBar style="light" />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: colors.bg },
               animation: 'fade',
             }}
-          />
-        </Stack>
-        <SheetHost />
+          >
+            <Stack.Screen name="index" />
+            <Stack.Screen
+              name="player"
+              options={{
+                presentation: 'fullScreenModal',
+                gestureEnabled: false,
+                animation: 'fade',
+              }}
+            />
+          </Stack>
+          <SheetHost />
+        </SessionProvider>
       </DatabaseProvider>
     </GestureHandlerRootView>
   );

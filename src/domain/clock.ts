@@ -41,3 +41,19 @@ export class DevClock implements Clock {
     return Date.now() + this.offsetMs;
   }
 }
+
+export class TestClock implements Clock {
+  constructor(private currentMs = 0) {}
+
+  now(): number {
+    return this.currentMs;
+  }
+
+  set(ms: number): void {
+    this.currentMs = ms;
+  }
+
+  advance(ms: number): void {
+    this.currentMs += ms;
+  }
+}

@@ -170,6 +170,10 @@ export class SessionRepo {
     this.db.run(`UPDATE session_logs SET post_state = ? WHERE id = ?;`, [state, id]);
   }
 
+  updateVoice(id: string, voiceId: string): void {
+    this.db.run(`UPDATE session_logs SET voice_id = ? WHERE id = ?;`, [voiceId, id]);
+  }
+
   getById(id: string): SessionLog | null {
     const row = this.db.first<RawSessionRow>('SELECT * FROM session_logs WHERE id = ?;', [id]);
     return row ? mapRow(row) : null;
