@@ -20,6 +20,7 @@ This document tracks all significant product, architectural, technical, and engi
 - [ADR-010: SDK 58 Dependency Closure, Peer Direct Linking & Toolchain Alignment](#adr-010-sdk-58-dependency-closure-peer-direct-linking--toolchain-alignment)
 - [ADR-011: Pure Domain Segregation, Root SheetHost & Ephemeral State Architecture](#adr-011-pure-domain-segregation-root-sheethost--ephemeral-state-architecture)
 - [ADR-012: Phase 1 Domain Gap Closure, WCAG Automated Contrast & Jest Optimization](#adr-012-phase-1-domain-gap-closure-wcag-automated-contrast--jest-optimization)
+- [ADR-013: SQLite Persistence Architecture, Repositories & Idempotent Session Transactions](#adr-013-sqlite-persistence-architecture-repositories--idempotent-session-transactions)
 
 ---
 
@@ -220,4 +221,44 @@ This document tracks all significant product, architectural, technical, and engi
   - Keeps all domain and analytics logic 100% pure, deterministic, and instant to test.
 - **Architectural Impact:**
   - Test suite expanded from 7 suites / 53 tests to 8 suites / 69 tests, all passing across both `Asia/Kolkata` (IST) and `America/New_York` (EST) in under 0.5s.
+  - Zero TypeScript errors (`npx tsc --noEmit`), zero ESLint warnings (`eslint --max-warnings 0`), 100% Prettier formatting compliance.
+
+---
+
+## Phase 2: Offline SQLite Persistence Architecture & Repositories
+
+### ADR-013: SQLite Persistence Architecture, Repositories & Idempotent Session Transactions
+
+- **Date:** 2026-11-08
+- **Status:** Accepted
+- **Context:** Ember is strictly offline-first with no user accounts, no cloud sync, and no remote analytics. SQLite (`ember.db`) is the sole durable source of truth for all application data: session logs, practice ledgers, streak continuity, Rest Grace allocations, subscription and Free Pass entitlements, and user preferences. We required an enterprise-grade SQLite persistence layer adhering to Master Plan Part 4 §5, supporting both Android runtime execution (`expo-sqlite` synchronous operations) and headless CI unit testing (`better-sqlite3`).
+- **Decision:**
+  1. **Synchronous `Db` Interface Abstraction:** Created `src/data/db.ts` defining a synchronous database interface (`exec`, `run`, `all`, `first`, `tx`, `close`). Implemented `ExpoSqliteDb` wrapping `expo-sqlite` (`openDatabaseSync`, `withTransactionSync`, `execSync`, `runSync`, `getAllSync`, `getFirstSync`) and `BetterSqliteDb` wrapping `better-sqlite3`. Both enforce `journal_mode = WAL` and `foreign_keys = ON`.
+  2. **Ordered Migration Framework (`PRAGMA user_version`):** Created `src/data/migrations.ts` executing linear schema migrations. Migration 1 constructs the complete 9-table relational schema:
+     - `audio_protocols`, `voices`, `protocol_voice_tracks`, `ambient_beds`, `session_logs`, `day_ledger`, `streak_state`, `user_entitlements`, `user_preferences`.
+     - Seeded initial catalog rows: protocols (`rapid_reset_5`, `deep_rest_10`, `midday_reboot_20`, `rest_unwind_sleep_30`), voices (`maya_warm`, `arjun_whisper`, `elena_gentle`, `david_deep`), ambient beds (`rain_gentle`, `pink_noise`, `binaural_rest`, `none`), and bundled voice tracks. Catalogs are seeded prior to `user_preferences` to satisfy foreign-key constraints on `selected_voice_id`.
+  3. **Domain-Driven Repositories:** Implemented clean repository layers in `src/data/repos/`:
+     - `SessionRepo`: Complete session lifecycle (`createSession`, `updateProgress`, `recordCheckin`, `finalizeSession`, `commitSession`, `getById`, `getRecent`).
+     - `StreakRepo`: Singleton streak state persistence (`get`, `save`).
+     - `LedgerRepo`: Practice history and Rest Grace ledger queries (`recordPractice`, `isCoveredByGrace`, `getWeekSummary`, `getRecentPracticeDays`).
+     - `EntitlementRepo`: Subscription, Lifetime, and Free Pass entitlement management (`getEffective`, `grantFreePass`, `consumeFreePass`, `setEntitlement`, `hasFreePassAvailable`).
+     - `PrefsRepo`: User preferences management (`get`, `update`).
+     - `ProtocolRepo`: Catalog protocol retrieval (`getAll`, `getById`, `seedProtocols`).
+     - `VoiceRepo`: Catalog voice retrieval and track mapping (`getAll`, `getById`, `importVoicePack`, `getTrack`).
+  4. **Single-Transaction Atomic Session Completion:** Implemented `SessionRepo.commitSession` executing within an atomic `db.tx(...)` transaction. The transaction:
+     - Enforces row-level atomic guard (`UPDATE session_logs ... WHERE id=? AND committed_at_ms IS NULL`), returning immediately if already committed (guaranteeing absolute idempotency against duplicate streak credits or duplicate free pass grants).
+     - Integrates pure domain algorithm `applyCredit` to compute streak continuity and Rest Grace bank progression.
+     - Upserts daily practice minutes into `day_ledger`.
+     - Evaluates 3-day consecutive short session qualification and automatically grants a Free Pass entitlement when eligible.
+  5. **Persistence & Restart Unit Testing:** Built 4 dedicated test suites in `__tests__/data/`:
+     - `db_migrations.test.ts`: Fresh DB creation, migration ordering, catalog seeding, foreign key cascades/enforcement, idempotency, and rollback.
+     - `repositories.test.ts`: Comprehensive CRUD operations across all 7 repositories.
+     - `session_transactions.test.ts`: Atomic completion, Rest Grace coverage, Free Pass grants, idempotency, finalize protection, and disk I/O rollback.
+     - `persistence_restart.test.ts`: Disk-backed DB tests simulating application close and reopen across processes, verifying complete data survival, timezone preservation, and midnight boundary integrity.
+- **Rationale:**
+  - Wrapping SQLite operations in synchronous transactions eliminates asynchronous race conditions, UI flicker, and partial write corruption during Android activity suspension.
+  - Row-level atomic guards (`committed_at_ms IS NULL`) ensure that duplicate commit events (e.g., player close + background heartbeat) cannot corrupt streak counts or grant redundant free passes.
+- **Architectural Impact:**
+  - Complete data layer ready for Phase 3 (audio playback engine) and Phase 4 (sanctuary and player UI).
+  - Test suite grew to 12 test suites and 96 unit tests, running in < 0.6 seconds in CI.
   - Zero TypeScript errors (`npx tsc --noEmit`), zero ESLint warnings (`eslint --max-warnings 0`), 100% Prettier formatting compliance.
