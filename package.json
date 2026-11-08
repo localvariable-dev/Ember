@@ -14,7 +14,8 @@
     "test": "jest --forceExit",
     "test:tz": "TZ=Asia/Kolkata jest --forceExit && TZ=America/New_York jest --forceExit",
     "verify:assets": "node tools/audio/verify-assets.mjs",
-    "placeholders": "node tools/audio/make-placeholders.mjs && node tools/audio/make-chime.mjs"
+    "manifest": "node tools/audio/generate-manifest.mjs",
+    "placeholders": "node tools/audio/make-placeholders.mjs && node tools/audio/make-chime.mjs && node tools/audio/generate-manifest.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/fraunces": "^0.2.3",

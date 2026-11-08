@@ -162,9 +162,11 @@ async function generateBrownNoiseOgg(outPath) {
     '-f',
     'lavfi',
     '-i',
-    'anoisesrc=d=60:c=brown:r=48000:a=0.15',
-    '-af',
-    'lowpass=f=800,loudnorm=I=-26:TP=-1.5:LRA=3',
+    'anoisesrc=d=62:c=brown:r=48000:a=0.15',
+    '-filter_complex',
+    '[0:a]lowpass=f=800[flt];[flt]atrim=2:62,asetpts=PTS-STARTPTS[rest];[flt]atrim=0:2,asetpts=PTS-STARTPTS[head];[rest][head]acrossfade=d=2:c1=qsin:c2=qsin,loudnorm=I=-26:TP=-1.5:LRA=3[out]',
+    '-map',
+    '[out]',
     '-c:a',
     'libopus',
     '-b:a',
@@ -176,7 +178,7 @@ async function generateBrownNoiseOgg(outPath) {
 }
 
 /**
- * Synthesizes gentle continuous rainfall acoustic texture.
+ * Synthesizes gentle continuous rainfall acoustic texture with 2-second equal-power crossfade.
  */
 async function generateRainOgg(outPath) {
   await runFfmpeg([
@@ -184,9 +186,11 @@ async function generateRainOgg(outPath) {
     '-f',
     'lavfi',
     '-i',
-    'anoisesrc=d=60:c=pink:r=48000:a=0.12',
-    '-af',
-    'highpass=f=400,lowpass=f=4500,loudnorm=I=-26:TP=-1.5:LRA=4',
+    'anoisesrc=d=62:c=pink:r=48000:a=0.12',
+    '-filter_complex',
+    '[0:a]highpass=f=400,lowpass=f=4500[flt];[flt]atrim=2:62,asetpts=PTS-STARTPTS[rest];[flt]atrim=0:2,asetpts=PTS-STARTPTS[head];[rest][head]acrossfade=d=2:c1=qsin:c2=qsin,loudnorm=I=-26:TP=-1.5:LRA=4[out]',
+    '-map',
+    '[out]',
     '-c:a',
     'libopus',
     '-b:a',
@@ -198,7 +202,7 @@ async function generateRainOgg(outPath) {
 }
 
 /**
- * Synthesizes ocean rolling surf with 10-second wave swell cycles.
+ * Synthesizes ocean rolling surf with 10-second wave swell cycles and 2-second equal-power crossfade.
  */
 async function generateOceanDriftOgg(outPath) {
   await runFfmpeg([
@@ -206,9 +210,11 @@ async function generateOceanDriftOgg(outPath) {
     '-f',
     'lavfi',
     '-i',
-    'anoisesrc=d=60:c=pink:r=48000:a=0.15',
-    '-af',
-    "lowpass=f=1200,volume=eval=frame:volume='0.4+0.5*sin(2*PI*t/10)',loudnorm=I=-26:TP=-1.5:LRA=6",
+    'anoisesrc=d=62:c=pink:r=48000:a=0.15',
+    '-filter_complex',
+    "[0:a]lowpass=f=1200,volume=eval=frame:volume='0.4+0.5*sin(2*PI*t/10)'[flt];[flt]atrim=2:62,asetpts=PTS-STARTPTS[rest];[flt]atrim=0:2,asetpts=PTS-STARTPTS[head];[rest][head]acrossfade=d=2:c1=qsin:c2=qsin,loudnorm=I=-26:TP=-1.5:LRA=6[out]",
+    '-map',
+    '[out]',
     '-c:a',
     'libopus',
     '-b:a',
@@ -220,7 +226,7 @@ async function generateOceanDriftOgg(outPath) {
 }
 
 /**
- * Synthesizes night forest wilderness ambience.
+ * Synthesizes night forest wilderness ambience with 2-second equal-power crossfade.
  */
 async function generateNightForestOgg(outPath) {
   await runFfmpeg([
@@ -228,9 +234,11 @@ async function generateNightForestOgg(outPath) {
     '-f',
     'lavfi',
     '-i',
-    'anoisesrc=d=60:c=brown:r=48000:a=0.08',
-    '-af',
-    'highpass=f=150,lowpass=f=2500,volume=0.8,loudnorm=I=-26:TP=-1.5:LRA=4',
+    'anoisesrc=d=62:c=brown:r=48000:a=0.08',
+    '-filter_complex',
+    '[0:a]highpass=f=150,lowpass=f=2500,volume=0.8[flt];[flt]atrim=2:62,asetpts=PTS-STARTPTS[rest];[flt]atrim=0:2,asetpts=PTS-STARTPTS[head];[rest][head]acrossfade=d=2:c1=qsin:c2=qsin,loudnorm=I=-26:TP=-1.5:LRA=4[out]',
+    '-map',
+    '[out]',
     '-c:a',
     'libopus',
     '-b:a',

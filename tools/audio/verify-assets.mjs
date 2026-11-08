@@ -23,14 +23,14 @@ export const BUDGETS = {
   'beds/brown_noise.ogg': 0.8 * 1024 * 1024, // 0.8 MB
   'beds/ocean_drift.ogg': 0.8 * 1024 * 1024, // 0.8 MB
   'beds/night_forest.ogg': 0.8 * 1024 * 1024, // 0.8 MB
-  'beds/theta_6hz.flac': 5.0 * 1024 * 1024, // 5.0 MB
-  'beds/delta_2hz.flac': 5.0 * 1024 * 1024, // 5.0 MB
+  'beds/theta_6hz.flac': 3.5 * 1024 * 1024, // 3.5 MB
+  'beds/delta_2hz.flac': 3.5 * 1024 * 1024, // 3.5 MB
 
   // Chime
   'chime_rise.wav': 0.3 * 1024 * 1024, // 0.3 MB
 
   // Total bundled
-  TOTAL_BUNDLED: 42 * 1024 * 1024, // 42 MB
+  TOTAL_BUNDLED: 40 * 1024 * 1024, // 40 MB maximum canonical budget (Parts 4 & 5)
 };
 
 export async function computeSha256(filePath) {
@@ -52,6 +52,23 @@ export async function verifyAssets(baseDir = 'assets/audio', isRelease = false) 
     errors: [],
     placeholders: [],
   };
+
+  const manifestPath = path.resolve('src/audio/protocols.generated.json');
+  if (!existsSync(manifestPath)) {
+    results.valid = false;
+    results.errors.push('Missing src/audio/protocols.generated.json manifest');
+  } else {
+    try {
+      const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+      if (!manifest.protocols || manifest.protocols.length !== 3) {
+        results.valid = false;
+        results.errors.push('protocols.generated.json must contain all 3 canonical protocols');
+      }
+    } catch {
+      results.valid = false;
+      results.errors.push('protocols.generated.json is not valid JSON');
+    }
+  }
 
   const assetList = [
     // Chime
@@ -154,7 +171,7 @@ export async function verifyAssets(baseDir = 'assets/audio', isRelease = false) 
   if (results.totalBytes > BUDGETS.TOTAL_BUNDLED) {
     results.valid = false;
     results.errors.push(
-      `Total bundled audio exceeds 42 MB budget: ${(results.totalBytes / 1024 / 1024).toFixed(2)} MB`,
+      `Total bundled audio exceeds 40 MB budget: ${(results.totalBytes / 1024 / 1024).toFixed(2)} MB`,
     );
   }
 
@@ -169,7 +186,7 @@ async function main() {
 
   console.log('\n--- Asset Verification Summary ---');
   console.log(`Total Assets Checked: ${results.assets.length}`);
-  console.log(`Total Size: ${(results.totalBytes / 1024 / 1024).toFixed(2)} MB (Budget: 42 MB)`);
+  console.log(`Total Size: ${(results.totalBytes / 1024 / 1024).toFixed(2)} MB (Budget: 40 MB)`);
 
   if (results.placeholders.length > 0) {
     console.log(`\nNotice: ${results.placeholders.length} assets are development placeholders:`);

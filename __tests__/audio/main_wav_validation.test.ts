@@ -61,6 +61,6 @@ describe('Main.wav Technical Validation & Preservation', () => {
 
     // Verify SHA-256 matches registered hash
     const hash = createHash('sha256').update(buf).digest('hex');
-    expect(hash).toBe('5370a4127a1838ef9353ff419cefe60520fc8d7379766bb94f3ba79b977e1806');
+    expect(hash).toBe('079aec60210f0560327d5e3f8b3af21a446bbb9f4da027f035d771ec69c1402b');
   });
 });

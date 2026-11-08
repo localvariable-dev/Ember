@@ -1,0 +1,661 @@
+{
+  "asset_version": 1,
+  "generated_at": "2026-11-08T17:06:23.969Z",
+  "protocols": [
+    {
+      "id": "rapid_reset_5",
+      "title": "Rapid Reset",
+      "subtitle": "5 min · The physiological sigh & progressive ease",
+      "minutes": 5,
+      "planned_ms": 300000,
+      "tier": "free",
+      "supports_modes": 0,
+      "sigh_in_script": 1,
+      "sort_order": 1,
+      "tracks": {
+        "maya_warm": {
+          "voice_id": "maya_warm",
+          "delivery": "bundled",
+          "placeholder": false,
+          "filename": "rapid_reset_5.ogg",
+          "sha256": "079aec60210f0560327d5e3f8b3af21a446bbb9f4da027f035d771ec69c1402b",
+          "bytes": 876704,
+          "duration_ms": 300000,
+          "cues_focus": [
+            {
+              "type": "body",
+              "startMs": 0,
+              "endMs": 24000,
+              "label": "Settle in"
+            },
+            {
+              "type": "body",
+              "startMs": 24000,
+              "endMs": 40000,
+              "label": "The physiological sigh"
+            },
+            {
+              "type": "sigh",
+              "startMs": 40000,
+              "endMs": 50000,
+              "label": "Sigh"
+            },
+            {
+              "type": "sigh",
+              "startMs": 50000,
+              "endMs": 60000,
+              "label": "Sigh"
+            },
+            {
+              "type": "body",
+              "startMs": 60000,
+              "endMs": 68000,
+              "label": "Let it return"
+            },
+            {
+              "type": "release",
+              "startMs": 68000,
+              "endMs": 128000,
+              "label": "Squeeze and drop"
+            },
+            {
+              "type": "breath",
+              "startMs": 128000,
+              "endMs": 198000,
+              "label": "In four, out six",
+              "pattern": {
+                "inhaleMs": 4000,
+                "holdMs": 0,
+                "exhaleMs": 6000,
+                "hold2Ms": 0
+              }
+            },
+            {
+              "type": "body",
+              "startMs": 198000,
+              "endMs": 250000,
+              "label": "Rest"
+            },
+            {
+              "type": "body",
+              "startMs": 250000,
+              "endMs": 300000,
+              "label": "Coming back"
+            }
+          ],
+          "cues_sleep": null
+        },
+        "arjun_deep": {
+          "voice_id": "arjun_deep",
+          "delivery": "bundled",
+          "placeholder": true,
+          "filename": "rapid_reset_5.ogg",
+          "sha256": "ca3bc1914e471d2ccef8f2a9bdfb6bef4335ccb5a623b099b3c9b69e91df123a",
+          "bytes": 601599,
+          "duration_ms": 300000,
+          "cues_focus": [
+            {
+              "type": "body",
+              "startMs": 0,
+              "endMs": 24000,
+              "label": "Settle in"
+            },
+            {
+              "type": "body",
+              "startMs": 24000,
+              "endMs": 40000,
+              "label": "The physiological sigh"
+            },
+            {
+              "type": "sigh",
+              "startMs": 40000,
+              "endMs": 50000,
+              "label": "Sigh"
+            },
+            {
+              "type": "sigh",
+              "startMs": 50000,
+              "endMs": 60000,
+              "label": "Sigh"
+            },
+            {
+              "type": "body",
+              "startMs": 60000,
+              "endMs": 68000,
+              "label": "Let it return"
+            },
+            {
+              "type": "release",
+              "startMs": 68000,
+              "endMs": 128000,
+              "label": "Squeeze and drop"
+            },
+            {
+              "type": "breath",
+              "startMs": 128000,
+              "endMs": 198000,
+              "label": "In four, out six",
+              "pattern": {
+                "inhaleMs": 4000,
+                "holdMs": 0,
+                "exhaleMs": 6000,
+                "hold2Ms": 0
+              }
+            },
+            {
+              "type": "body",
+              "startMs": 198000,
+              "endMs": 250000,
+              "label": "Rest"
+            },
+            {
+              "type": "body",
+              "startMs": 250000,
+              "endMs": 300000,
+              "label": "Coming back"
+            }
+          ],
+          "cues_sleep": null
+        }
+      }
+    },
+    {
+      "id": "afternoon_recharge_10",
+      "title": "Afternoon Recharge",
+      "subtitle": "10 min · Rapid recovery without afternoon brain fog",
+      "minutes": 10,
+      "planned_ms": 600000,
+      "tier": "free",
+      "supports_modes": 1,
+      "sigh_in_script": 0,
+      "sort_order": 2,
+      "tracks": {
+        "maya_warm": {
+          "voice_id": "maya_warm",
+          "delivery": "bundled",
+          "placeholder": true,
+          "filename_focus": "afternoon_recharge_10.focus.ogg",
+          "filename_sleep": "afternoon_recharge_10.sleep.ogg",
+          "sha256_focus": "288960a52f037514672cfb579f9e05aeb12e167d39af48fa541d1912d85277c9",
+          "sha256_sleep": "e975bfbba4808c637a4292ec54f55a3735532d17d095872c07f516bf0a669d56",
+          "bytes_focus": 1203699,
+          "bytes_sleep": 1203699,
+          "duration_ms": 600000,
+          "cues_focus": [
+            {
+              "type": "body",
+              "startMs": 0,
+              "endMs": 45000,
+              "label": "Arrival & intent"
+            },
+            {
+              "type": "breath",
+              "startMs": 45000,
+              "endMs": 135000,
+              "label": "Slow breath",
+              "pattern": {
+                "inhaleMs": 4000,
+                "holdMs": 0,
+                "exhaleMs": 6000,
+                "hold2Ms": 0
+              }
+            },
+            {
+              "type": "body",
+              "startMs": 135000,
+              "endMs": 435000,
+              "label": "Body rotation"
+            },
+            {
+              "type": "breath",
+              "startMs": 435000,
+              "endMs": 510000,
+              "label": "Bright awareness",
+              "pattern": {
+                "inhaleMs": 5000,
+                "holdMs": 0,
+                "exhaleMs": 5000,
+                "hold2Ms": 0
+              }
+            },
+            {
+              "type": "outro",
+              "startMs": 510000,
+              "endMs": 600000,
+              "label": "Rise and awaken"
+            }
+          ],
+          "cues_sleep": [
+            {
+              "type": "body",
+              "startMs": 0,
+              "endMs": 45000,
+              "label": "Arrival & intent"
+            },
+            {
+              "type": "breath",
+              "startMs": 45000,
+              "endMs": 135000,
+              "label": "Slow breath",
+              "pattern": {
+                "inhaleMs": 4000,
+                "holdMs": 0,
+                "exhaleMs": 6000,
+                "hold2Ms": 0
+              }
+            },
+            {
+              "type": "body",
+              "startMs": 135000,
+              "endMs": 435000,
+              "label": "Body rotation"
+            },
+            {
+              "type": "breath",
+              "startMs": 435000,
+              "endMs": 510000,
+              "label": "Bright awareness",
+              "pattern": {
+                "inhaleMs": 5000,
+                "holdMs": 0,
+                "exhaleMs": 5000,
+                "hold2Ms": 0
+              }
+            },
+            {
+              "type": "outro",
+              "startMs": 510000,
+              "endMs": 600000,
+              "label": "Drifting to sleep"
+            }
+          ]
+        },
+        "arjun_deep": {
+          "voice_id": "arjun_deep",
+          "delivery": "bundled",
+          "placeholder": true,
+          "filename_focus": "afternoon_recharge_10.focus.ogg",
+          "filename_sleep": "afternoon_recharge_10.sleep.ogg",
+          "sha256_focus": "9fe0106e97054d420f564b2397271826192511a42d24a79efc4c44750ae7f1df",
+          "sha256_sleep": "1afcf4def75a7c94ee7f84eb2cd4227641ad18eff8f9063ede89886d92d08c7d",
+          "bytes_focus": 1203699,
+          "bytes_sleep": 1203699,
+          "duration_ms": 600000,
+          "cues_focus": [
+            {
+              "type": "body",
+              "startMs": 0,
+              "endMs": 45000,
+              "label": "Arrival & intent"
+            },
+            {
+              "type": "breath",
+              "startMs": 45000,
+              "endMs": 135000,
+              "label": "Slow breath",
+              "pattern": {
+                "inhaleMs": 4000,
+                "holdMs": 0,
+                "exhaleMs": 6000,
+                "hold2Ms": 0
+              }
+            },
+            {
+              "type": "body",
+              "startMs": 135000,
+              "endMs": 435000,
+              "label": "Body rotation"
+            },
+            {
+              "type": "breath",
+              "startMs": 435000,
+              "endMs": 510000,
+              "label": "Bright awareness",
+              "pattern": {
+                "inhaleMs": 5000,
+                "holdMs": 0,
+                "exhaleMs": 5000,
+                "hold2Ms": 0
+              }
+            },
+            {
+              "type": "outro",
+              "startMs": 510000,
+              "endMs": 600000,
+              "label": "Rise and awaken"
+            }
+          ],
+          "cues_sleep": [
+            {
+              "type": "body",
+              "startMs": 0,
+              "endMs": 45000,
+              "label": "Arrival & intent"
+            },
+            {
+              "type": "breath",
+              "startMs": 45000,
+              "endMs": 135000,
+              "label": "Slow breath",
+              "pattern": {
+                "inhaleMs": 4000,
+                "holdMs": 0,
+                "exhaleMs": 6000,
+                "hold2Ms": 0
+              }
+            },
+            {
+              "type": "body",
+              "startMs": 135000,
+              "endMs": 435000,
+              "label": "Body rotation"
+            },
+            {
+              "type": "breath",
+              "startMs": 435000,
+              "endMs": 510000,
+              "label": "Bright awareness",
+              "pattern": {
+                "inhaleMs": 5000,
+                "holdMs": 0,
+                "exhaleMs": 5000,
+                "hold2Ms": 0
+              }
+            },
+            {
+              "type": "outro",
+              "startMs": 510000,
+              "endMs": 600000,
+              "label": "Drifting to sleep"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "deep_rest_30",
+      "title": "Deep Rest & Yoga Nidra",
+      "subtitle": "30 min · Deep physiological restoration & theta states",
+      "minutes": 30,
+      "planned_ms": 1800000,
+      "tier": "pro",
+      "supports_modes": 1,
+      "sigh_in_script": 0,
+      "sort_order": 3,
+      "tracks": {
+        "maya_warm": {
+          "voice_id": "maya_warm",
+          "delivery": "bundled",
+          "placeholder": true,
+          "filename_focus": "deep_rest_30.focus.ogg",
+          "filename_sleep": "deep_rest_30.sleep.ogg",
+          "sha256_focus": "78fd88a8b2531f5ddb148c786b29957d809aa99975a98cc87661db5d894eebb5",
+          "sha256_sleep": "49ed7af975497ddf34e14ae9a36f83897442ba2925696609fa42dde0f3bd2821",
+          "bytes_focus": 3612099,
+          "bytes_sleep": 3612099,
+          "duration_ms": 1800000,
+          "cues_focus": [
+            {
+              "type": "body",
+              "startMs": 0,
+              "endMs": 150000,
+              "label": "Settle & intention"
+            },
+            {
+              "type": "breath",
+              "startMs": 150000,
+              "endMs": 330000,
+              "label": "Lengthen exhale",
+              "pattern": {
+                "inhaleMs": 4000,
+                "holdMs": 0,
+                "exhaleMs": 7000,
+                "hold2Ms": 0
+              }
+            },
+            {
+              "type": "body",
+              "startMs": 330000,
+              "endMs": 930000,
+              "label": "Rotation of consciousness"
+            },
+            {
+              "type": "breath",
+              "startMs": 930000,
+              "endMs": 1170000,
+              "label": "Breath counting",
+              "pattern": {
+                "inhaleMs": 5000,
+                "holdMs": 0,
+                "exhaleMs": 5000,
+                "hold2Ms": 0
+              }
+            },
+            {
+              "type": "body",
+              "startMs": 1170000,
+              "endMs": 1410000,
+              "label": "Sensation of opposites"
+            },
+            {
+              "type": "body",
+              "startMs": 1410000,
+              "endMs": 1620000,
+              "label": "Visualization"
+            },
+            {
+              "type": "silence",
+              "startMs": 1620000,
+              "endMs": 1710000,
+              "label": "Deep stillness"
+            },
+            {
+              "type": "outro",
+              "startMs": 1710000,
+              "endMs": 1800000,
+              "label": "Gentle awakening"
+            }
+          ],
+          "cues_sleep": [
+            {
+              "type": "body",
+              "startMs": 0,
+              "endMs": 150000,
+              "label": "Settle & intention"
+            },
+            {
+              "type": "breath",
+              "startMs": 150000,
+              "endMs": 330000,
+              "label": "Lengthen exhale",
+              "pattern": {
+                "inhaleMs": 4000,
+                "holdMs": 0,
+                "exhaleMs": 7000,
+                "hold2Ms": 0
+              }
+            },
+            {
+              "type": "body",
+              "startMs": 330000,
+              "endMs": 930000,
+              "label": "Rotation of consciousness"
+            },
+            {
+              "type": "breath",
+              "startMs": 930000,
+              "endMs": 1170000,
+              "label": "Breath counting",
+              "pattern": {
+                "inhaleMs": 5000,
+                "holdMs": 0,
+                "exhaleMs": 5000,
+                "hold2Ms": 0
+              }
+            },
+            {
+              "type": "body",
+              "startMs": 1170000,
+              "endMs": 1410000,
+              "label": "Sensation of opposites"
+            },
+            {
+              "type": "body",
+              "startMs": 1410000,
+              "endMs": 1620000,
+              "label": "Visualization"
+            },
+            {
+              "type": "silence",
+              "startMs": 1620000,
+              "endMs": 1710000,
+              "label": "Deep stillness"
+            },
+            {
+              "type": "outro",
+              "startMs": 1710000,
+              "endMs": 1800000,
+              "label": "Sleep transition"
+            }
+          ]
+        },
+        "arjun_deep": {
+          "voice_id": "arjun_deep",
+          "delivery": "bundled",
+          "placeholder": true,
+          "filename_focus": "deep_rest_30.focus.ogg",
+          "filename_sleep": "deep_rest_30.sleep.ogg",
+          "sha256_focus": "660dd891c39129ccc8a01ae7d4c5c9accef7ec456190e0f5d680b5c2a04f594d",
+          "sha256_sleep": "bb4517b80d4a9fc4dcfba347892e0ffb7c8e3fc738dbd600a3daca903a6eedec",
+          "bytes_focus": 3612099,
+          "bytes_sleep": 3612099,
+          "duration_ms": 1800000,
+          "cues_focus": [
+            {
+              "type": "body",
+              "startMs": 0,
+              "endMs": 150000,
+              "label": "Settle & intention"
+            },
+            {
+              "type": "breath",
+              "startMs": 150000,
+              "endMs": 330000,
+              "label": "Lengthen exhale",
+              "pattern": {
+                "inhaleMs": 4000,
+                "holdMs": 0,
+                "exhaleMs": 7000,
+                "hold2Ms": 0
+              }
+            },
+            {
+              "type": "body",
+              "startMs": 330000,
+              "endMs": 930000,
+              "label": "Rotation of consciousness"
+            },
+            {
+              "type": "breath",
+              "startMs": 930000,
+              "endMs": 1170000,
+              "label": "Breath counting",
+              "pattern": {
+                "inhaleMs": 5000,
+                "holdMs": 0,
+                "exhaleMs": 5000,
+                "hold2Ms": 0
+              }
+            },
+            {
+              "type": "body",
+              "startMs": 1170000,
+              "endMs": 1410000,
+              "label": "Sensation of opposites"
+            },
+            {
+              "type": "body",
+              "startMs": 1410000,
+              "endMs": 1620000,
+              "label": "Visualization"
+            },
+            {
+              "type": "silence",
+              "startMs": 1620000,
+              "endMs": 1710000,
+              "label": "Deep stillness"
+            },
+            {
+              "type": "outro",
+              "startMs": 1710000,
+              "endMs": 1800000,
+              "label": "Gentle awakening"
+            }
+          ],
+          "cues_sleep": [
+            {
+              "type": "body",
+              "startMs": 0,
+              "endMs": 150000,
+              "label": "Settle & intention"
+            },
+            {
+              "type": "breath",
+              "startMs": 150000,
+              "endMs": 330000,
+              "label": "Lengthen exhale",
+              "pattern": {
+                "inhaleMs": 4000,
+                "holdMs": 0,
+                "exhaleMs": 7000,
+                "hold2Ms": 0
+              }
+            },
+            {
+              "type": "body",
+              "startMs": 330000,
+              "endMs": 930000,
+              "label": "Rotation of consciousness"
+            },
+            {
+              "type": "breath",
+              "startMs": 930000,
+              "endMs": 1170000,
+              "label": "Breath counting",
+              "pattern": {
+                "inhaleMs": 5000,
+                "holdMs": 0,
+                "exhaleMs": 5000,
+                "hold2Ms": 0
+              }
+            },
+            {
+              "type": "body",
+              "startMs": 1170000,
+              "endMs": 1410000,
+              "label": "Sensation of opposites"
+            },
+            {
+              "type": "body",
+              "startMs": 1410000,
+              "endMs": 1620000,
+              "label": "Visualization"
+            },
+            {
+              "type": "silence",
+              "startMs": 1620000,
+              "endMs": 1710000,
+              "label": "Deep stillness"
+            },
+            {
+              "type": "outro",
+              "startMs": 1710000,
+              "endMs": 1800000,
+              "label": "Sleep transition"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

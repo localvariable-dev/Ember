@@ -25,8 +25,10 @@ export function buildTimeline(script, clipDurations, variant = 'none') {
   const clips = [];
   let currentBlockStartMs = 0;
 
-  for (const block of blocks) {
+  for (let bIndex = 0; bIndex < blocks.length; bIndex++) {
+    const block = blocks[bIndex];
     const isAnchored = typeof block.durationMs === 'number' && block.durationMs > 0;
+    const isLastBlock = bIndex === blocks.length - 1;
     let blockCursorMs = currentBlockStartMs;
     let maxClipEndMs = currentBlockStartMs;
 
@@ -58,7 +60,9 @@ export function buildTimeline(script, clipDurations, variant = 'none') {
 
     const blockDurationMs = isAnchored
       ? block.durationMs
-      : Math.max(blockCursorMs - currentBlockStartMs, 1000);
+      : isLastBlock && script.targetMs && currentBlockStartMs < script.targetMs
+        ? Math.max(script.targetMs - currentBlockStartMs, blockCursorMs - currentBlockStartMs)
+        : Math.max(blockCursorMs - currentBlockStartMs, 1000);
 
     const blockEndMs = currentBlockStartMs + blockDurationMs;
 

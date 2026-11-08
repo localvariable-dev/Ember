@@ -14,6 +14,7 @@ import { spawn } from 'node:child_process';
 import { generateAllBeds } from './make-beds.mjs';
 import { generateChime } from './make-chime.mjs';
 import { generatePlaceholders } from './make-placeholders.mjs';
+import { generateManifests } from './generate-manifest.mjs';
 
 function runCmd(cmd, args) {
   return new Promise((resolve, reject) => {
@@ -41,7 +42,7 @@ export async function masterMainWav(
     '-i',
     mainWavPath,
     '-af',
-    'loudnorm=I=-18:TP=-1.5:LRA=7:measured_I=-20.66:measured_TP=-1.99:measured_LRA=6.70:measured_thresh=-31.15:offset=-0.1:linear=true,apad=whole_dur=300',
+    'loudnorm=I=-18:TP=-2.5:LRA=7:measured_I=-20.66:measured_TP=-1.99:measured_LRA=6.70:measured_thresh=-31.15:offset=-0.1:linear=true,apad=whole_dur=300',
     '-t',
     '300',
     '-ar',
@@ -68,11 +69,18 @@ async function main() {
     await generatePlaceholders();
     await generateAllBeds();
     await generateChime();
+    await generateManifests();
     return;
   }
 
   if (args.includes('--master-main')) {
     await masterMainWav();
+    await generateManifests();
+    return;
+  }
+
+  if (args.includes('--manifest')) {
+    await generateManifests();
     return;
   }
 

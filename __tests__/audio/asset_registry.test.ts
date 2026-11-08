@@ -46,7 +46,7 @@ describe('Asset Registry & Metadata Architecture', () => {
       expect(track?.isPlaceholder).toBe(false);
       expect(track?.durationMs).toBe(300_000);
       expect(track?.sha256).toBe(
-        '5370a4127a1838ef9353ff419cefe60520fc8d7379766bb94f3ba79b977e1806',
+        '079aec60210f0560327d5e3f8b3af21a446bbb9f4da027f035d771ec69c1402b',
       );
       expect(track?.cues.length).toBeGreaterThan(5);
     });
@@ -105,6 +105,54 @@ describe('Asset Registry & Metadata Architecture', () => {
       expect(CHIME_METADATA.assetKey).toBe('chime_rise');
       expect(CHIME_METADATA.durationMs).toBe(3200);
       expect(CHIME_METADATA.filename).toBe('chime_rise.wav');
+    });
+  });
+
+  describe('Protocols Generated Manifest (JSON)', () => {
+    const protocolsManifest = require('../../src/audio/protocols.generated.json');
+
+    it('contains asset_version and all 3 canonical protocols', () => {
+      expect(protocolsManifest.asset_version).toBe(1);
+      expect(protocolsManifest.protocols).toHaveLength(3);
+
+      const ids = protocolsManifest.protocols.map((p: any) => p.id);
+      expect(ids).toEqual(['rapid_reset_5', 'afternoon_recharge_10', 'deep_rest_30']);
+    });
+
+    it('configures mode support and sigh primers consistently', () => {
+      const p5 = protocolsManifest.protocols.find((p: any) => p.id === 'rapid_reset_5');
+      expect(p5.supports_modes).toBe(0);
+      expect(p5.sigh_in_script).toBe(1);
+      expect(p5.tracks.maya_warm.placeholder).toBe(false);
+      expect(p5.tracks.maya_warm.cues_focus).toHaveLength(9);
+      expect(p5.tracks.maya_warm.cues_sleep).toBeNull();
+
+      const p10 = protocolsManifest.protocols.find((p: any) => p.id === 'afternoon_recharge_10');
+      expect(p10.supports_modes).toBe(1);
+      expect(p10.sigh_in_script).toBe(0);
+      expect(p10.tracks.maya_warm.placeholder).toBe(true);
+      expect(p10.tracks.maya_warm.cues_focus).toHaveLength(5);
+      expect(p10.tracks.maya_warm.cues_sleep).toHaveLength(5);
+
+      const p30 = protocolsManifest.protocols.find((p: any) => p.id === 'deep_rest_30');
+      expect(p30.supports_modes).toBe(1);
+      expect(p30.sigh_in_script).toBe(0);
+      expect(p30.tracks.maya_warm.placeholder).toBe(true);
+      expect(p30.tracks.maya_warm.cues_focus).toHaveLength(8);
+      expect(p30.tracks.maya_warm.cues_sleep).toHaveLength(8);
+    });
+
+    it('ensures cue timestamps match protocol duration targets', () => {
+      for (const p of protocolsManifest.protocols) {
+        const maya = p.tracks.maya_warm;
+        const lastFocusCue = maya.cues_focus[maya.cues_focus.length - 1];
+        expect(lastFocusCue.endMs).toBe(p.planned_ms);
+
+        if (p.supports_modes === 1) {
+          const lastSleepCue = maya.cues_sleep[maya.cues_sleep.length - 1];
+          expect(lastSleepCue.endMs).toBe(p.planned_ms);
+        }
+      }
     });
   });
 

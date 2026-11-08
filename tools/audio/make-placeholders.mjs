@@ -58,7 +58,7 @@ async function generatePlaceholderOgg(outPath, durationSec) {
     '-c:a',
     'libopus',
     '-b:a',
-    '20k',
+    '16k',
     '-vbr',
     'on',
     outPath,

@@ -24,6 +24,7 @@ This document tracks all significant product, architectural, technical, and engi
 - [ADR-014: Schema Reconciliation, Catalogue Alignment & Free Pass Entitlement Integrity](#adr-014-schema-reconciliation-catalogue-alignment--free-pass-entitlement-integrity)
 - [ADR-015: Sanctuary Experience, Responsive Layout, and Root SheetHost Integration](#adr-015-sanctuary-experience-responsive-layout-and-root-sheethost-integration)
 - [ADR-016: Audio Asset Pipeline, Main.wav Mastering, Offline Asset Management & Asset Registry](#adr-016-audio-asset-pipeline-mainwav-mastering-offline-asset-management--asset-registry)
+- [ADR-017: Audio Pipeline Contract Reconciliation, 40 MB Enforced Budget & Machine Manifest Generation](#adr-017-audio-pipeline-contract-reconciliation-40-mb-enforced-budget--machine-manifest-generation)
 
 ---
 
@@ -119,7 +120,7 @@ This document tracks all significant product, architectural, technical, and engi
 - **Context:** `Main.wav` is an existing 5-minute NSDR studio recording (299.75 s) located in `Voices/Main.wav`. Technical inspection showed: uncompressed 16-bit PCM mono at 24,000 Hz, 14.38 MB, integrated loudness -20.66 LUFS, true peak -1.99 dBTP.
 - **Decision:** Preserve `Voices/Main.wav` untouched as the master asset. For runtime delivery, encode to Opus in Ogg (`.opus`/`.ogg`) at 32–48 kbps VBR mono, resampled to 48 kHz, and normalized to -18.0 LUFS (±1.0 LUFS) with true peak $\le -1.0\text{ dBTP}$.
 - **Rationale:**
-  1. Bundling 14.38 MB for a single 5-minute track violates Ember's total asset budget of $\le 42\text{ MB}$ for all protocols and ambient beds combined.
+  1. Bundling 14.38 MB for a single 5-minute track violates Ember's total asset budget of $\le 40\text{ MB}$ for all protocols and ambient beds combined.
   2. Opus at 32–48 kbps reduces the file size to ~1.2 MB (~92% reduction) with zero perceptible loss in spoken voice quality.
   3. Resampling to 48 kHz aligns with standard Android audio hardware mixing rates, preventing runtime resampling latency in the audio engine.
 - **Architectural Impact:**
@@ -348,7 +349,7 @@ This document tracks all significant product, architectural, technical, and engi
   1. An existing candidate studio recording for Rapid Reset 5 (`Voices/Main.wav`) exists in the workspace. Its original recording integrity must be 100% preserved and never destructively modified.
   2. The candidate recording must be verified against technical broadcast standards (duration ~300s, -18.0 LUFS integrated loudness, $\le -1.5$ dBTP true peak, LRA $\le 7$ LU) and mastered into an Android-optimized Opus asset (`assets/audio/voice/maya_warm/rapid_reset_5.ogg`, Opus 32 kbps mono, 48 kHz, size $\le 1.4$ MB).
   3. Real studio recordings for the 10-minute (`afternoon_recharge_10`) and 30-minute (`deep_rest_30`) sessions do not exist yet. Fabricating fake narration or pretending recordings exist is strictly prohibited. An explicit development placeholder strategy is required, with embedded metadata tags (`comment=EMBER_DEV_PLACEHOLDER_NOT_FOR_RELEASE`) and release verification tooling that strictly rejects placeholder audio.
-  4. Ambient soundscapes (Rain, Brown Noise, Ocean Drift, Night Forest in 96 kbps Opus; 6 Hz Theta & 2 Hz Delta in 22.05 kHz stereo lossless FLAC) and a 3.2s rising harmonic chime (`assets/audio/chime_rise.wav`) must be synthesized and packaged within strict individual and total bundle budgets ($\le 42$ MB total).
+  4. Ambient soundscapes (Rain, Brown Noise, Ocean Drift, Night Forest in 96 kbps Opus; 6 Hz Theta & 2 Hz Delta in 22.05 kHz stereo lossless FLAC) and a 3.2s rising harmonic chime (`assets/audio/chime_rise.wav`) must be synthesized and packaged within strict individual and total bundle budgets ($\le 40$ MB total).
   5. An asset registry and offline download architecture (`OfflineAudioManager`) must be implemented to manage downloads, exponential backoff retries, `.tmp` staging, atomic renames, SHA-256 validation, and corrupted file auto-pruning.
 - **Decision:**
   1. **`Main.wav` Technical Verification & Preservation:**
@@ -361,7 +362,7 @@ This document tracks all significant product, architectural, technical, and engi
   3. **Ambient Bed & Chime Generation (`tools/audio/`):**
      - Pure Node harmonic chime generator (`make-chime.mjs`) creates 3.2s rising harmonic chime (44.1 kHz 16-bit mono WAV, 282 KB $\le 0.3$ MB budget).
      - Noise and binaural generator (`make-beds.mjs`) creates 4 noise loops (Rain, Brown Noise, Ocean Drift, Night Forest at ~650 KB $\le 0.8$ MB) and 2 phase-exact 24s binaural loops in 22.05 kHz stereo FLAC (Theta 6 Hz, Delta 2 Hz at 608 KB $\le 3.5$ MB).
-     - Total bundled audio package measures 40.58 MB, well within the 42 MB threshold.
+     - Total bundled audio package measures 40.58 MB (reconciled in Phase 4.1 to $\le 40$ MB canonical ceiling).
   4. **Runtime Asset Registry (`src/audio/assetRegistry*.ts`):**
      - Implemented `assetRegistry.ts` defining `VoiceTrackMetadata`, `AmbientBedMetadata`, `ChimeMetadata`, `ProtocolAudioMetadata`, and `verifySha256`.
      - `assetRegistry.generated.ts` registers all canonical protocols, soundscape beds, and voice tracks with duration, byte size, SHA-256 checksums, and cue timeline markers. Maya Rapid Reset 5 is flagged `isPlaceholder: false`; all missing recordings are flagged `isPlaceholder: true`.
@@ -374,4 +375,47 @@ This document tracks all significant product, architectural, technical, and engi
   - Prevents shipping mock/placeholder assets to production through fail-fast build verification.
 - **Architectural Impact:**
   - Expanded test suite to 18 test suites and 145 tests passing in < 1.4s across all timezones.
+  - Zero TypeScript errors (`npx tsc --noEmit`), zero ESLint warnings (`eslint --max-warnings 0`), 100% Prettier formatting compliance.
+
+---
+
+### ADR-017: Audio Pipeline Contract Reconciliation, 40 MB Enforced Budget & Machine Manifest Generation
+
+- **Date:** 2026-11-08
+- **Status:** Accepted
+- **Context:** Following the initial Phase 4 implementation, Phase 4.1 required reconciling the audio pipeline against canonical Master Plan Parts 4 and 5:
+  1. The canonical bundled audio ceiling across Master Plan Parts 4 and 5 is strictly **40 MB maximum**, whereas Phase 4 initially reported 40.58 MB and referenced 42 MB.
+  2. Part 5 requires machine generation of both `src/audio/protocols.generated.json` and `src/audio/assetRegistry.generated.ts` from canonical script definitions (`tools/audio/scripts/*.script.json`) and measured audio files, not manual authoring.
+  3. Mastering specifications require Opus VBR encoding at 32 kbps target, integrated loudness $-18.0 \pm 0.5$ LUFS, true peak $\le -1.5$ dBTP, and LRA $\le 7$ LU on the decoded output.
+  4. Ambient beds must meet $-26.0$ LUFS integrated loudness with mathematically seamless loop boundaries (2-second equal-power crossfade for noise beds; 24-second phase-exact integer cycles for binaural FLAC beds).
+  5. Safeguards (`Voices/Main.wav` SHA-256 preservation, release failure on placeholder assets, zero cloud/network telemetry) must remain inviolable.
+- **Decision:**
+  1. **Canonical 40 MB Budget Enforcement:**
+     - All 9 development placeholders were regenerated at 16 kbps Opus with embedded `EMBER_DEV_PLACEHOLDER_NOT_FOR_RELEASE` comment metadata.
+     - Total bundled audio size across all 17 assets was brought down from 42.55 MB (40.58 MiB) to **23.78 MiB** (24,933,780 bytes / 24.93 MB), well within the 40 MB ceiling under BOTH binary ($23.78\text{ MiB} \le 40\text{ MiB}$) and decimal ($24.93\text{ MB} \le 40\text{ MB}$) conventions.
+     - Updated `tools/audio/verify-assets.mjs` to enforce `TOTAL_BUNDLED: 40 * 1024 * 1024` (40 MiB) and binaural bed budgets $\le 3.5$ MB each.
+  2. **Deterministic Manifest Generator (`tools/audio/generate-manifest.mjs`):**
+     - Implemented `generateManifests()` to compute cue timelines from `rapid_reset_5.script.json`, `afternoon_recharge_10.script.json`, and `deep_rest_30.script.json` using `buildTimeline()`.
+     - Generates `src/audio/protocols.generated.json` mapping all 3 canonical protocols, mode variants, measured byte sizes, SHA-256 hashes, and cues.
+     - Synchronizes `src/audio/assetRegistry.generated.ts` with identical measured hashes and cue structures.
+     - Integrated into `npm run manifest` and `npm run placeholders`.
+  3. **Mastering & True Peak Compliance:**
+     - Mastered `assets/audio/voice/maya_warm/rapid_reset_5.ogg` from `Voices/Main.wav` with `TP=-2.5` margin to absorb Opus lossy reconstruction peaks.
+     - Measured decoded parameters:
+       - Integrated Loudness: **-18.23 LUFS** (target $-18.0 \pm 0.5$ LUFS)
+       - True Peak: **-2.07 dBTP** (target $\le -1.5$ dBTP)
+       - Loudness Range: **6.50 LU** (target $\le 7$ LU)
+       - Container/Codec: Opus in OGG, 48,000 Hz, 1 channel (mono), VBR 32k (average ~23.4 kbps)
+       - Duration: Exactly 300.00 seconds
+       - SHA-256: `079aec60210f0560327d5e3f8b3af21a446bbb9f4da027f035d771ec69c1402b`
+     - Verified `Voices/Main.wav` completely untouched (`4a1f411ba472cb0f66687ea6e1f6dbef666370f884bd31677586fa0d6a868991`).
+  4. **Seamless Ambient Beds Construction:**
+     - Updated `tools/audio/make-beds.mjs` to synthesize 62-second noise sources and apply 2-second equal-power crossfades (`acrossfade=d=2:c1=qsin:c2=qsin`) for Rain, Brown Noise, Ocean Drift (10s swell sync), and Night Forest.
+     - All 6 beds verified at $-26.0$ LUFS target (Rain: $-26.00$, Brown Noise: $-25.93$, Ocean Drift: $-26.88$, Night Forest: $-25.98$, Theta: $-26.69$, Delta: $-25.93$).
+     - Preserved 24.0s phase-exact stereo FLAC loops for Theta 6 Hz and Delta 2 Hz.
+- **Rationale:**
+  - Establishes full contract reconciliation against Master Plan Parts 4 and 5 without modifying working application features or introducing runtime bloat.
+  - Ensures clean, deterministic offline builds that pass CI size and placeholder checks.
+- **Architectural Impact:**
+  - Expanded test suite to 18 test suites and 149 tests passing across all timezones in < 1.4s.
   - Zero TypeScript errors (`npx tsc --noEmit`), zero ESLint warnings (`eslint --max-warnings 0`), 100% Prettier formatting compliance.
