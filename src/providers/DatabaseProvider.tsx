@@ -1,10 +1,10 @@
 /**
  * Ember Database & Repositories Provider
- * Master Plan Part 1 §2.2, Part 4 §5.1, Part 6 §7.2
- * Provides SQLite repositories and reactive preference/streak states to all UI components.
+ * Master Plan Part 1 §2.2, Part 3 §4.1, Part 4 §5.1, Part 6 §7.2
+ * Provides SQLite repositories, reactive preference/streak/entitlement states, and PaywallProvider.
  */
 
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { Db } from '../data/db';
 import { openAppDatabase } from '../data/db';
 import { migrate } from '../data/migrations';
@@ -19,6 +19,8 @@ import {
 } from '../data/repos';
 import type { UserEntitlement, UserPreferences } from '../data/types';
 import type { StreakState } from '../domain/streakEngine';
+import type { BillingService, EntitlementService } from '../billing';
+import { createBillingService, EntitlementServiceImpl, PaywallProvider } from '../billing';
 
 let globalDb: Db | null = null;
 
@@ -35,7 +37,7 @@ export function setAppDbForTesting(db: Db | null): void {
   globalDb = db;
 }
 
-interface DatabaseContextValue {
+export interface DatabaseContextValue {
   db: Db;
   sessionRepo: SessionRepo;
   streakRepo: StreakRepo;
@@ -44,6 +46,8 @@ interface DatabaseContextValue {
   prefsRepo: PrefsRepo;
   protocolRepo: ProtocolRepo;
   voiceRepo: VoiceRepo;
+  entitlementService: EntitlementService;
+  billingService: BillingService;
   preferences: UserPreferences;
   streak: StreakState;
   isPro: boolean;
@@ -54,7 +58,19 @@ interface DatabaseContextValue {
 
 const DatabaseContext = createContext<DatabaseContextValue | null>(null);
 
-export function DatabaseProvider({ children, testDb }: { children: React.ReactNode; testDb?: Db }) {
+export interface DatabaseProviderProps {
+  children: React.ReactNode;
+  testDb?: Db;
+  testBillingService?: BillingService;
+  testEntitlementService?: EntitlementService;
+}
+
+export function DatabaseProvider({
+  children,
+  testDb,
+  testBillingService,
+  testEntitlementService,
+}: DatabaseProviderProps) {
   const db = useMemo(() => testDb ?? getAppDb(), [testDb]);
 
   const repos = useMemo(() => {
@@ -69,24 +85,46 @@ export function DatabaseProvider({ children, testDb }: { children: React.ReactNo
     };
   }, [db]);
 
+  const entitlementService = useMemo(
+    () => testEntitlementService ?? new EntitlementServiceImpl(repos.entitlementRepo),
+    [testEntitlementService, repos.entitlementRepo],
+  );
+
+  const billingService = useMemo(
+    () => testBillingService ?? createBillingService(),
+    [testBillingService],
+  );
+
   const [preferences, setPreferences] = useState<UserPreferences>(() => repos.prefsRepo.get());
   const [streak, setStreak] = useState<StreakState>(() => repos.streakRepo.get());
-  const [isPro, setIsPro] = useState<boolean>(() => repos.entitlementRepo.hasActivePro());
+  const [isPro, setIsPro] = useState<boolean>(
+    () => entitlementService.getSnapshot().level === 'pro',
+  );
   const [activePass, setActivePass] = useState<UserEntitlement | null>(() =>
     repos.entitlementRepo.getActivePass(),
   );
 
+  useEffect(() => {
+    // Keep isPro and activePass reactive to EntitlementService changes
+    const unsub = entitlementService.subscribe((snapshot) => {
+      setIsPro(snapshot.level === 'pro');
+      setActivePass(snapshot.passAvailable ? repos.entitlementRepo.getActivePass() : null);
+    });
+    return unsub;
+  }, [entitlementService, repos.entitlementRepo]);
+
   const refreshState = useCallback(() => {
     const nextPrefs = repos.prefsRepo.get();
     const nextStreak = repos.streakRepo.get();
-    const nextPro = repos.entitlementRepo.hasActivePro();
+    const snapshot = entitlementService.getSnapshot();
+    const nextPro = snapshot.level === 'pro';
     const nextPass = repos.entitlementRepo.getActivePass();
 
     setPreferences(nextPrefs);
     setStreak(nextStreak);
     setIsPro(nextPro);
     setActivePass(nextPass);
-  }, [repos]);
+  }, [repos, entitlementService]);
 
   const updatePreferences = useCallback(
     (changes: Partial<UserPreferences>): UserPreferences => {
@@ -115,6 +153,8 @@ export function DatabaseProvider({ children, testDb }: { children: React.ReactNo
     () => ({
       db,
       ...repos,
+      entitlementService,
+      billingService,
       preferences,
       streak,
       isPro,
@@ -122,10 +162,27 @@ export function DatabaseProvider({ children, testDb }: { children: React.ReactNo
       updatePreferences,
       refreshState,
     }),
-    [db, repos, preferences, streak, isPro, activePass, updatePreferences, refreshState],
+    [
+      db,
+      repos,
+      entitlementService,
+      billingService,
+      preferences,
+      streak,
+      isPro,
+      activePass,
+      updatePreferences,
+      refreshState,
+    ],
   );
 
-  return <DatabaseContext.Provider value={value}>{children}</DatabaseContext.Provider>;
+  return (
+    <DatabaseContext.Provider value={value}>
+      <PaywallProvider billingService={billingService} entitlementService={entitlementService}>
+        {children}
+      </PaywallProvider>
+    </DatabaseContext.Provider>
+  );
 }
 
 export function useDatabase(): DatabaseContextValue {

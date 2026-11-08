@@ -30,6 +30,7 @@ This document tracks all significant product, architectural, technical, and engi
 - [ADR-020: Standard SVG Container Rotation & Elimination of Kebab-Case DOM Properties](#adr-020-standard-svg-container-rotation--elimination-of-kebab-case-dom-properties)
 - [ADR-021: Journey, Retention Architecture & Gentle Local Notification Scheduling](#adr-021-journey-retention-architecture--gentle-local-notification-scheduling)
 - [ADR-022: React 19 State Lifecycle Stabilization, Hook Memoization & Update Depth Guarding](#adr-022-react-19-state-lifecycle-stabilization-hook-memoization--update-depth-guarding)
+- [ADR-023: Decoupled Monetisation Architecture, Billing Abstraction & Offline Entitlement Reconciliation](#adr-023-decoupled-monetisation-architecture-billing-abstraction--offline-entitlement-reconciliation)
 
 ---
 
@@ -638,3 +639,45 @@ This document tracks all significant product, architectural, technical, and engi
   - Infinite update loop completely eliminated; web export, preview, and mobile app mount cleanly.
   - All 24 test suites and 198 tests pass across timezones.
   - Zero TypeScript errors (`npx tsc --noEmit`), zero ESLint warnings, 100% Prettier formatting compliance.
+
+---
+
+### ADR-023: Decoupled Monetisation Architecture, Billing Abstraction & Offline Entitlement Reconciliation
+
+- **Date:** 2026-11-09
+- **Status:** Accepted
+- **Context:**
+  Ember Master Plan Part 3 §4 and Part 4 §5.2 require a decoupled monetisation architecture:
+  1. **Decoupling Rule:** UI components (`PaywallSheet`, `SessionCard`, `JourneySheet`) must never directly import or call a billing provider. They interact exclusively through `EntitlementService` (state of truth) and `PaywallProvider` (presentation and outcome orchestration).
+  2. **Product Catalogue & Dynamic Pricing:** Prices must come from `BillingProduct` data (`priceMicros`, `localizedPrice`) at runtime, never hard-coded.
+  3. **Entitlement State Separation:** Local purchase state, verified provider state, and cached SQLite state (`user_entitlements`). Core offline sessions remain 100% available without connectivity.
+  4. **Offline Subscription Reconciliation:** Active monthly subscriptions are honored for 3 days past `expires_at` offline (`OFFLINE_GRACE_MS = 259_200_000`). After 3 days without reconnection, access lapses to `free` without deleting user history.
+  5. **Policy Compliance & Zero Advertising:** Strict adherence to Google Play Payments policy (Razorpay prohibited for Play-distributed digital goods). Absolute guarantee of zero advertising infrastructure or trackers.
+- **Decision:**
+  1. **Billing Abstraction (`src/billing/`):**
+     - `BillingService` interface (`init`, `getProducts`, `purchase`, `restore`, `onPurchasesUpdated`, `dispose`).
+     - `MockBillingAdapter`: In-memory store, configurable outcome simulation (`success`, `cancel`, `fail`, `pending`), dev helpers (`devGrant`, `devRevokeAll`, `setNextOutcome`).
+     - `PlayBillingAdapter`: Clean native Google Play Billing skeleton verifying native environment and enforcing acknowledgment within 3 days.
+     - `createBillingService(env)`: Factory resolving provider based on `EXPO_PUBLIC_BILLING_MODE`. Explicitly throws an error if Razorpay is requested for Play distribution.
+     - `EntitlementServiceImpl`: Pure resolution via `resolveEntitlement(rows, nowMs)`. Enforces precedence (Lifetime Pro > Monthly Subscription > Free Pass > Free). Enforces lifetime cap of 1 Free Pass. Replaces provider-sourced rows wholesale via `applyOwned()` while preserving `free_pass` records.
+     - `PaywallProvider`: Orchestrates presentation with contextual payload, dynamic product retrieval, purchase execution, and outcome resolution (`purchased`, `restored`, `dismissed`, `alternative_chosen`).
+  2. **Dynamic UI Copy & Contextual Paywall (`src/features/paywall/PaywallSheet.tsx`):**
+     - 84% height bottom sheet with plan radio group (Lifetime preselected).
+     - 7 contextual copy variants (`default`, `post_taste`, `pass_expired`, `pro_expired`, `bed_locked`, `voice_locked`, `insights`).
+     - Anchoring math dynamically derived from `BillingProduct.priceMicros`:
+       - Lifetime: `₹1,199`, "Equal to about 15 months of Monthly."
+       - Monthly: `₹79 / month`, "About ₹2.60 a day. Cancel anytime." (In mock mode: "Test plan.").
+     - Secondary actions: `Restore purchases`, `Not now`, `Try the 10-minute recharge instead` (switches to 10-min recharge when opened from locked 30-min session).
+     - Informative inline messaging for pending payments, network errors, billing unavailability, and purchase restoration.
+  3. **Zero Advertising Architecture:**
+     - Zero ad SDKs, banners, interstitials, or sponsored placements exist. Verified via automated audit test `__tests__/billing/ad_free_audit.test.ts`.
+  4. **Comprehensive Test Suite:**
+     - 4 new test suites (`entitlements.test.ts`, `mock_billing_adapter.test.ts`, `paywall_flow.test.ts`, `ad_free_audit.test.ts`) covering all gating rules, purchase flows, cancellations, failures, restoration, offline grace, and ad-free compliance.
+- **Rationale:**
+  - Guarantees complete separation of concerns between payment providers and domain/UI layers.
+  - Ensures seamless offline experience while protecting revenue and respecting Google Play policies.
+- **Architectural Impact:**
+  - 28 test suites, 228 tests passing cleanly across all timezones.
+  - Zero TypeScript errors (`npx tsc --noEmit`), zero ESLint warnings, 100% Prettier formatting compliance.
+  - Audio asset budget strictly preserved at 23.78 MB $\le 40$ MB.
+  - `Voices/Main.wav` SHA-256 untouched (`4a1f411ba472cb0f66687ea6e1f6dbef666370f884bd31677586fa0d6a868991`).

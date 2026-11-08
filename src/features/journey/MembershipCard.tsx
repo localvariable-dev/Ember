@@ -79,7 +79,7 @@ export function MembershipCard({ isPro, activePass, activeVoiceId }: MembershipC
         {showUpgrade && (
           <Pressable
             style={styles.upgradeButton}
-            onPress={() => openSheet('paywall', { paywallVariant: 'settings' })}
+            onPress={() => openSheet('paywall', { paywallVariant: 'default' })}
             accessibilityRole="button"
             accessibilityLabel="Upgrade to Ember Pro"
           >

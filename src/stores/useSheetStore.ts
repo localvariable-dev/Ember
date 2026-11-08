@@ -11,6 +11,7 @@ export type SheetType =
 
 export interface SheetPayload {
   paywallVariant?:
+    | 'default'
     | 'card_tap'
     | 'post_taste'
     | 'settings'
@@ -19,8 +20,11 @@ export interface SheetPayload {
     | 'voice_locked'
     | 'insights'
     | 'pass_expired'
-    | 'pro_expired';
-  voicePickerContext?: 'sanctuary' | 'player';
+    | 'pro_expired'
+    | undefined;
+  source?: string | undefined;
+  protocolId?: string | undefined;
+  voicePickerContext?: 'sanctuary' | 'player' | undefined;
   [key: string]: unknown;
 }
 

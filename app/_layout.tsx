@@ -33,7 +33,14 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 });
 
 function AppLifecycle() {
-  const { sessionRepo, prefsRepo, streakRepo, updatePreferences } = useDatabase();
+  const {
+    sessionRepo,
+    prefsRepo,
+    streakRepo,
+    entitlementService,
+    billingService,
+    updatePreferences,
+  } = useDatabase();
   const setProtocol = useSessionStore((state) => state.setProtocol);
   const initializedRef = useRef(false);
 
@@ -44,6 +51,18 @@ function AppLifecycle() {
 
       // Setup gentle notification channel on Android
       setupNotificationChannel().catch(() => {});
+
+      // Entitlement initialization & background billing sync (Part 3 §4.4)
+      entitlementService.init().catch(() => {});
+      billingService
+        .init()
+        .then(() => billingService.restore())
+        .then((owned) => {
+          if (owned.length > 0) {
+            entitlementService.applyOwned(owned).catch(() => {});
+          }
+        })
+        .catch(() => {});
 
       // Track app open timestamp & reset lapsed sent count
       const now = Date.now();
@@ -83,6 +102,15 @@ function AppLifecycle() {
     const appStateSub = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
         const activeNow = Date.now();
+        entitlementService.expireStale().catch(() => {});
+        billingService
+          .restore()
+          .then((owned) => {
+            if (owned.length > 0) {
+              entitlementService.applyOwned(owned).catch(() => {});
+            }
+          })
+          .catch(() => {});
         updatePreferences({ lastOpenAtMs: activeNow });
         syncNotificationSchedule({ sessionRepo, prefsRepo, streakRepo }, activeNow).catch(() => {});
       }
@@ -96,7 +124,15 @@ function AppLifecycle() {
         appStateSub.remove();
       }
     };
-  }, [sessionRepo, prefsRepo, streakRepo, updatePreferences, setProtocol]);
+  }, [
+    sessionRepo,
+    prefsRepo,
+    streakRepo,
+    entitlementService,
+    billingService,
+    updatePreferences,
+    setProtocol,
+  ]);
 
   return null;
 }

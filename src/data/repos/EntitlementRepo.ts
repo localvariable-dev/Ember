@@ -109,6 +109,21 @@ export class EntitlementRepo {
     return res.changes;
   }
 
+  expireStaleSubscriptions(nowMs = Date.now(), graceMs = 259_200_000): number {
+    const res = this.db.run(
+      `
+      UPDATE user_entitlements
+      SET status = 'expired'
+      WHERE kind = 'subscription'
+        AND status = 'active'
+        AND expires_at_ms IS NOT NULL
+        AND (expires_at_ms + ?) <= ?;
+      `,
+      [graceMs, nowMs],
+    );
+    return res.changes;
+  }
+
   consumePassForSession(sessionId: string, nowMs = Date.now()): boolean {
     const pass = this.getActivePass(nowMs);
     if (!pass) return false;
@@ -209,6 +224,15 @@ export class EntitlementRepo {
   replaceProviderRows(source: 'mock' | 'google_play' | 'razorpay', rows: UserEntitlement[]): void {
     this.db.tx(() => {
       this.db.run(`DELETE FROM user_entitlements WHERE source = ?;`, [source]);
+      for (const ent of rows) {
+        this.upsert(ent);
+      }
+    });
+  }
+
+  replaceAllProviderRows(rows: UserEntitlement[]): void {
+    this.db.tx(() => {
+      this.db.run(`DELETE FROM user_entitlements WHERE source != 'app';`);
       for (const ent of rows) {
         this.upsert(ent);
       }

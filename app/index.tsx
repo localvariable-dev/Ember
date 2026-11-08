@@ -13,8 +13,8 @@ import type { ProtocolId } from '../src/domain/constants';
 import { getTimeContext } from '../src/domain/timeOfDay';
 import type { Mode, RecoveryState } from '../src/data/types';
 import { useDatabase } from '../src/providers/DatabaseProvider';
+import { usePaywall } from '../src/billing';
 import { useSessionStore } from '../src/stores/useSessionStore';
-import { useSheetStore } from '../src/stores/useSheetStore';
 
 import { TopBar } from '../src/features/sanctuary/TopBar';
 import { GreetingBlock } from '../src/features/sanctuary/GreetingBlock';
@@ -37,10 +37,18 @@ export default function SanctuaryScreen() {
   const controller = useSessionController();
   const [now] = useState(() => Date.now());
 
-  const { sessionRepo, prefsRepo, streakRepo, preferences, updatePreferences, isPro, activePass } =
-    useDatabase();
+  const {
+    sessionRepo,
+    prefsRepo,
+    streakRepo,
+    entitlementService,
+    preferences,
+    updatePreferences,
+    isPro,
+    activePass,
+  } = useDatabase();
+  const { present } = usePaywall();
 
-  const openSheet = useSheetStore((state) => state.openSheet);
   const { resetSession, setProtocol, setMode, setVoice, setAmbientBed, setSigh } =
     useSessionStore();
 
@@ -129,8 +137,39 @@ export default function SanctuaryScreen() {
     router.push('/player');
   };
 
-  const handleBeginRestLocked = () => {
-    openSheet('paywall', { paywallVariant: 'card_tap' });
+  const handleBeginRestLocked = async () => {
+    const decision = entitlementService.canStartProtocol(selectedProtocolId);
+    const variant = !decision.allowed ? decision.paywallVariant : 'default';
+    const outcome = await present({
+      source: 'begin_locked',
+      variant,
+      protocolId: selectedProtocolId,
+    });
+
+    if (outcome === 'purchased' || outcome === 'restored') {
+      handleBeginRestUnlocked();
+    } else if (outcome === 'alternative_chosen') {
+      setSelectedProtocolId('afternoon_recharge_10');
+      resetSession();
+      setProtocol('afternoon_recharge_10');
+      setMode(currentMode);
+      setVoice(preferences.selectedVoiceId);
+      setAmbientBed(preferences.ambientBedId);
+      setSigh(preferences.sighPacerDefault);
+
+      try {
+        await controller.startSession({
+          protocolId: 'afternoon_recharge_10',
+          mode: currentMode,
+          voiceId: preferences.selectedVoiceId,
+          ambientBedId: preferences.ambientBedId,
+          sigh: preferences.sighPacerDefault,
+        });
+      } catch (err) {
+        console.warn('Failed to start alternative 10-minute recharge:', err);
+      }
+      router.push('/player');
+    }
   };
 
   return (
