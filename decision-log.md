@@ -547,3 +547,47 @@ This document tracks all significant product, architectural, technical, and engi
 - **Architectural Impact:**
   - Zero console warnings or DOM property errors during Player playback, pause, resume, or completion.
   - All 21 Jest suites and 172 tests pass. Web export succeeds cleanly.
+
+---
+
+### ADR-021: Journey, Retention Architecture & Gentle Local Notification Scheduling
+
+- **Date:** 2026-11-09
+- **Status:** Accepted
+- **Context:**
+  Implementing Ember Master Plan Part 1 §2.7, Part 2 §3.3–§3.8, and Part 4 §5.6. Ember requires an offline-first retention and insights surface (Journey sheet, streak persistence, Rest Grace banking, Calm Delta self-reported shift tracking) coupled with battery-safe Android local notifications that respect user quiet hours, permission denial, and Doze constraints.
+- **Decision:**
+  1. **Modular Journey UI (`src/features/journey/`):**
+     - `StreakHeader.tsx`: Ember ring, current streak, longest streak, 2 Rest Grace dot indicators, and status message reflecting `projectStreak` ('held_by_grace', 'lapsed', 'done_today', 'open', 'fresh').
+     - `Heatmap.tsx`: 7 rows (Mon–Sun) $\times$ ISO week columns (Mon-start), 30-day sliding window ending today, blank placeholder slots before the window (not level 0), today highlighted with 1dp `accentSoft` outline, and TalkBack accessibility labels on each cell. Level 0 = None, 1 = <10m, 2 = 10–29m, 3 = $\ge 30$m, Grace = ringed amber border with light fill.
+     - `StatsRow.tsx`: Total restorative minutes (rounded down) and completed session count.
+     - `CalmDeltaCard.tsx`: Measures self-reported perceived-state shift ($post\_state - pre\_state$) strictly as non-medical perceived change. Free users receive headline insight with $\ge 5$ paired sample threshold; Pro users unlock best time-of-day band ($n \ge 3$), 8-week SVG bar chart with zero baseline, and slice deltas by protocol, voice, and mode.
+     - `SessionRow.tsx`: Relative day (Today/Yesterday/date), time, duration, mode glyph (☼/☾), state transition dots, Pro badge, and inline tap expansion to reveal narrator voice, soundscape, and listened minutes.
+     - `ProInsightsTeaser.tsx`: Upsell banner linking free users to Paywall with variant `insights`.
+     - `MembershipCard.tsx`: Active tier display, Voice Picker link, non-medical relaxation disclaimer, and 7-tap version trigger for developer panel.
+     - `SoftNotificationPrompt.tsx`: Polite pre-prompt ("Want one gentle reminder a day? You choose the time.") displayed after session 1 completion.
+  2. **SQLite Retention & Free Pass Integration (`SessionRepo`, `StreakRepo`, `LedgerRepo`, `EntitlementRepo`):**
+     - Pure domain functions (`applyCredit`, `projectStreak`, `qualifiesForFreePass`) connected to SQLite persistence.
+     - 1 Rest Grace banked every 5 practice days (max 2 banked), holding progress at 5 when full.
+     - Automatic retroactive Grace consumption upon subsequent practice commit (up to 2 missed days covered and written to `day_ledger` as `kind='grace'`).
+     - Free Pass ("3-Day Streak Taste") granted after 3 consecutive days with short (5m/10m) sessions; consumed at 20% threshold of 30-min session; max 1 lifetime pass.
+  3. **Local Notification Service (`src/services/NotificationService.ts`):**
+     - Android notification channel `gentle` (importance `DEFAULT`, sound `null`, vibration `false`, light `#F59E0B`).
+     - Inexact date triggers via `expo-notifications`, battery-safe with zero exact alarms (`SCHEDULE_EXACT_ALARM` blocked in `app.config.ts`).
+     - Single pending notification at any time; cancelled and re-planned on app launch, foreground, session commit, and preference change.
+     - Quiet hours (22:30–07:30) clamped to 07:30 of the following morning.
+     - Learned reminder time: median start minute of commits in last 14 days ($\ge 3$ samples).
+     - Wind-down override: 21:30 when $\ge 2$ sleep sessions in last 7 days.
+     - Lapsed re-engagement: Day 3 & Day 7 nudges, then silence.
+     - Deep link `ember://begin?protocol=<id>` opens Sanctuary with requested protocol pre-selected without auto-starting audio.
+     - Permission denial sets `notifications_enabled = 0` and never pesters user again.
+     - Native `expo-notifications` calls safely guarded for non-Android and Jest environments.
+- **Rationale:**
+  - Guarantees retention mechanics and data integrity run 100% offline with zero cloud dependency.
+  - Honors Google Play policies by strictly avoiding exact alarm permissions.
+  - Maintains calm user experience without nagging or guilt-inducing streak loss messaging.
+- **Architectural Impact:**
+  - 23 test suites and 192 unit/integration tests passing cleanly.
+  - Zero TypeScript errors (`npx tsc --noEmit`), zero ESLint warnings, 100% Prettier formatting compliance.
+  - Audio asset budget strictly preserved at 23.78 MB $\le 40$ MB.
+  - `Voices/Main.wav` SHA-256 untouched (`4a1f411ba472cb0f66687ea6e1f6dbef666370f884bd31677586fa0d6a868991`).

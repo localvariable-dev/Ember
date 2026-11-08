@@ -320,6 +320,12 @@ export class WebPreviewDb implements Db {
       return null;
     }
     if (s.includes('from session_logs')) {
+      if (s.includes('count(*) as count') || s.includes('count(*)')) {
+        return { count: 0 } as unknown as T;
+      }
+      if (s.includes('coalesce')) {
+        return { minutes: 0, sessions: 0 } as unknown as T;
+      }
       return null;
     }
     if (s.includes('from day_ledger')) {

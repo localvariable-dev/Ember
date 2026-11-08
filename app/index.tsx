@@ -24,7 +24,12 @@ import { AmbientChips } from '../src/features/sanctuary/AmbientChips';
 import { VoiceAndPacerRow } from '../src/features/sanctuary/VoiceAndPacerRow';
 import { BeginRestButton } from '../src/features/sanctuary/BeginRestButton';
 import { MorningCheckInCard } from '../src/features/player/MorningCheckInCard';
+import { SoftNotificationPrompt } from '../src/features/journey/SoftNotificationPrompt';
 import { useSessionController } from '../src/features/player/SessionProvider';
+import {
+  requestNotificationPermission,
+  syncNotificationSchedule,
+} from '../src/services/NotificationService';
 
 export default function SanctuaryScreen() {
   const router = useRouter();
@@ -32,7 +37,8 @@ export default function SanctuaryScreen() {
   const controller = useSessionController();
   const [now] = useState(() => Date.now());
 
-  const { sessionRepo, preferences, updatePreferences, isPro, activePass } = useDatabase();
+  const { sessionRepo, prefsRepo, streakRepo, preferences, updatePreferences, isPro, activePass } =
+    useDatabase();
 
   const openSheet = useSheetStore((state) => state.openSheet);
   const { resetSession, setProtocol, setMode, setVoice, setAmbientBed, setSigh } =
@@ -57,6 +63,20 @@ export default function SanctuaryScreen() {
 
   const handleDismissMorning = () => {
     setMorningDismissed(true);
+  };
+
+  // Soft notification pre-prompt (after session 1 commits)
+  const stats = useMemo(() => sessionRepo.getStats(), [sessionRepo]);
+  const showSoftNotifPrompt = !preferences.notifPromptShown && stats.sessions >= 1;
+
+  const handleAcceptNotif = async () => {
+    const granted = await requestNotificationPermission();
+    updatePreferences({ notificationsEnabled: granted, notifPromptShown: true });
+    await syncNotificationSchedule({ sessionRepo, prefsRepo, streakRepo });
+  };
+
+  const handleDeclineNotif = () => {
+    updatePreferences({ notificationsEnabled: false, notifPromptShown: true });
   };
 
   const hasFreePass = Boolean(activePass && activePass.status === 'available');
@@ -133,6 +153,11 @@ export default function SanctuaryScreen() {
             onRate={handleRateMorning}
             onDismiss={handleDismissMorning}
           />
+        )}
+
+        {/* Soft Notification Pre-prompt (after session 1, shown once) */}
+        {showSoftNotifPrompt && (
+          <SoftNotificationPrompt onAccept={handleAcceptNotif} onDecline={handleDeclineNotif} />
         )}
 
         {/* Greeting & Context Line */}

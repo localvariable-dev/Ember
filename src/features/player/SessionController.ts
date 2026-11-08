@@ -39,6 +39,7 @@ import type { RecoveryState } from '../../data/types';
 import { generateUuid } from '../../data/uuid';
 import { hapticCardSelect, hapticFocusSessionEnd, hapticModeToggle } from '../../design/haptics';
 import { useSessionStore } from '../../stores/useSessionStore';
+import { syncNotificationSchedule } from '../../services/NotificationService';
 
 export interface Repositories {
   sessionRepo: SessionRepo;
@@ -374,6 +375,7 @@ export class SessionController {
             maxPositionMs: this.machineState.positionMs,
             listenedMs: this.machineState.listenedMs,
           });
+          syncNotificationSchedule(this.repos, now).catch(() => {});
         }
         break;
 

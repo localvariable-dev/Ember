@@ -1,55 +1,85 @@
 /**
  * JourneySheet Component (Screen 5)
- * Master Plan Part 1 §2.7
- * 92% snap bottom sheet displaying Streak Header, 30-day Heatmap, Stats, Calm Delta, and Session Log.
+ * Master Plan Part 1 §2.7, Part 2 §3.3-§3.8
+ *
+ * 92% snap bottom sheet displaying:
+ * - Streak Header (active ember ring, longest streak, Rest Grace indicators)
+ * - 30-day Retention Heatmap (7 rows x ISO week columns, Mon-start, today outline)
+ * - Restorative Aggregate Stats (minutes + completed sessions)
+ * - Calm Delta Card (perceived state shifts with Free headline & Pro deep analytics)
+ * - Expandable Session History (last 7 for Free, unlimited for Pro)
+ * - Pro Insights Teaser (Free only)
+ * - Gentle Daily Reminder toggle with automatic rescheduling
+ * - Membership Card (tier status, Voice Picker link, non-medical disclaimer, hidden dev panel)
  */
 
 import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { colors, radii, spacing, typography } from '../../design/tokens';
 import { useDatabase } from '../../providers/DatabaseProvider';
 import { useSheetStore } from '../../stores/useSheetStore';
 import { addDays, dayKeyFromMs } from '../../domain/dayKey';
+import { StreakHeader } from './StreakHeader';
+import { Heatmap } from './Heatmap';
+import { StatsRow } from './StatsRow';
+import { CalmDeltaCard } from './CalmDeltaCard';
+import { SessionRow } from './SessionRow';
+import { ProInsightsTeaser } from './ProInsightsTeaser';
+import { MembershipCard } from './MembershipCard';
+import {
+  requestNotificationPermission,
+  syncNotificationSchedule,
+} from '../../services/NotificationService';
 
 export function JourneySheet() {
-  const { streak, isPro, activePass, sessionRepo, ledgerRepo } = useDatabase();
-  const { closeSheet, openSheet } = useSheetStore();
+  const {
+    streak,
+    isPro,
+    activePass,
+    sessionRepo,
+    ledgerRepo,
+    prefsRepo,
+    streakRepo,
+    preferences,
+    updatePreferences,
+  } = useDatabase();
+  const { closeSheet } = useSheetStore();
 
   const [now] = useState(() => Date.now());
   const today = useMemo(() => dayKeyFromMs(now), [now]);
+  const yesterdayKey = useMemo(() => addDays(today, -1), [today]);
   const thirtyDaysAgo = useMemo(() => addDays(today, -29), [today]);
 
-  const stats = sessionRepo.getStats();
-  const recentSessions = sessionRepo.listRecent(isPro ? 50 : 7);
-  const ledgerRows = ledgerRepo.getRange(thirtyDaysAgo, today);
-  const practiceMap = new Map(ledgerRows.map((r) => [r.localDay, r]));
+  // Aggregate stats & queries
+  const stats = useMemo(() => sessionRepo.getStats(), [sessionRepo]);
+  const pairedSessions = useMemo(() => sessionRepo.getPairedSessions(), [sessionRepo]);
+  const ledgerRows = useMemo(
+    () => ledgerRepo.getRange(thirtyDaysAgo, today),
+    [ledgerRepo, thirtyDaysAgo, today],
+  );
+  const sessions = useMemo(
+    () => (isPro ? sessionRepo.listAll() : sessionRepo.listRecent(7)),
+    [sessionRepo, isPro],
+  );
 
-  // 30 days heatmap grid cells
-  const heatmapCells: { day: string; level: number; kind: string }[] = [];
-  for (let i = 29; i >= 0; i--) {
-    const d = addDays(today, -i);
-    const row = practiceMap.get(d);
-    let level = 0;
-    if (row) {
-      if (row.kind === 'grace') {
-        level = 1;
-      } else if (row.committedMs >= 1_800_000) {
-        level = 4;
-      } else if (row.committedMs >= 600_000) {
-        level = 3;
-      } else if (row.committedMs > 0) {
-        level = 2;
-      }
+  const handleToggleReminder = async (enabled: boolean) => {
+    if (enabled) {
+      const granted = await requestNotificationPermission();
+      updatePreferences({ notificationsEnabled: granted });
+      await syncNotificationSchedule({ sessionRepo, prefsRepo, streakRepo });
+    } else {
+      updatePreferences({ notificationsEnabled: false });
+      await syncNotificationSchedule({ sessionRepo, prefsRepo, streakRepo });
     }
-    heatmapCells.push({ day: d, level, kind: row?.kind ?? 'none' });
-  }
+  };
 
   return (
     <View style={styles.sheetContainer}>
       <View style={styles.grabber} />
 
+      {/* Sheet Header */}
       <View style={styles.headerRow}>
-        <Text style={styles.sheetTitle}>Your Rest Journey</Text>
+        <Text style={styles.sheetTitle}>Journey</Text>
         <Pressable
           style={styles.closeBtn}
           onPress={closeSheet}
@@ -65,158 +95,65 @@ export function JourneySheet() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Streak Header */}
-        <View style={styles.streakHeader}>
-          <View style={styles.streakStat}>
-            <View style={styles.emberRing}>
-              <View style={styles.emberCore} />
-            </View>
-            <View>
-              <Text style={styles.streakNumber}>{streak.currentStreak}-day</Text>
-              <Text style={styles.statSublabel}>Current streak</Text>
-            </View>
-          </View>
+        {/* 1. Streak Header */}
+        <StreakHeader streak={streak} today={today} />
 
-          <View style={styles.streakStat}>
-            <Text style={styles.streakNumberSmall}>{streak.longestStreak} days</Text>
-            <Text style={styles.statSublabel}>Longest</Text>
-          </View>
+        {/* 2. 30-Day Heatmap */}
+        <Heatmap today={today} ledgerRows={ledgerRows} />
 
-          <View style={styles.streakStat}>
-            <View style={styles.graceDotsRow}>
-              <View style={[styles.graceDot, streak.graceBanked >= 1 && styles.graceDotBanked]} />
-              <View style={[styles.graceDot, streak.graceBanked >= 2 && styles.graceDotBanked]} />
-            </View>
-            <Text style={styles.statSublabel}>{streak.graceBanked} Graces</Text>
-          </View>
-        </View>
+        {/* 3. Aggregate Stats */}
+        <StatsRow minutes={stats.minutes} sessions={stats.sessions} />
 
-        {/* 30 Days Heatmap */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Last 30 days</Text>
-          <View style={styles.heatmapGrid}>
-            {heatmapCells.map((cell) => {
-              const isToday = cell.day === today;
-              let bg: string = colors.surfaceRaised;
-              if (cell.level === 1) bg = 'rgba(245, 158, 11, 0.25)'; // grace
-              if (cell.level === 2) bg = 'rgba(245, 158, 11, 0.45)';
-              if (cell.level === 3) bg = 'rgba(245, 158, 11, 0.75)';
-              if (cell.level === 4) bg = colors.accent;
+        {/* 4. Calm Delta Insight Card */}
+        <CalmDeltaCard pairedSessions={pairedSessions} isPro={isPro} nowMs={now} />
 
-              return (
-                <View
-                  key={cell.day}
-                  style={[
-                    styles.heatmapCell,
-                    { backgroundColor: bg },
-                    isToday && styles.heatmapTodayCell,
-                  ]}
-                  accessibilityLabel={`${cell.day}: ${cell.kind} rest`}
-                />
-              );
-            })}
-          </View>
-          <View style={styles.heatmapLegend}>
-            <Text style={styles.legendText}>Less</Text>
-            <View style={[styles.legendCell, { backgroundColor: colors.surfaceRaised }]} />
-            <View style={[styles.legendCell, { backgroundColor: 'rgba(245, 158, 11, 0.45)' }]} />
-            <View style={[styles.legendCell, { backgroundColor: colors.accent }]} />
-            <Text style={styles.legendText}>More</Text>
-          </View>
-        </View>
-
-        {/* Aggregate Stats */}
-        <View style={styles.statsRow}>
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>{stats.minutes}</Text>
-            <Text style={styles.statLabel}>restorative minutes</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>{stats.sessions}</Text>
-            <Text style={styles.statLabel}>sessions completed</Text>
-          </View>
-        </View>
-
-        {/* Headline Calm Delta Insight */}
-        <View style={styles.insightCard}>
-          <Text style={styles.insightHeader}>Your Calm Delta</Text>
-          <Text style={styles.insightBody}>
-            {stats.sessions >= 5
-              ? 'When starting wired, your sessions guide you to calm or restored 88% of the time.'
-              : 'Complete 5 sessions to unlock your personalized recovery insight.'}
-          </Text>
-        </View>
-
-        {/* Session Log */}
-        <View style={styles.section}>
-          <View style={styles.logHeaderRow}>
+        {/* 5. Session History */}
+        <View style={styles.historySection}>
+          <View style={styles.historyHeader}>
             <Text style={styles.sectionTitle}>Session log</Text>
-            {!isPro && <Text style={styles.freeLimitTag}>Showing last 7</Text>}
+            {!isPro && sessions.length >= 7 && (
+              <Text style={styles.freeLimitTag}>Showing last 7</Text>
+            )}
           </View>
 
-          {recentSessions.length === 0 ? (
-            <Text style={styles.emptyText}>No rest sessions recorded yet.</Text>
+          {sessions.length === 0 ? (
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyText}>No rest sessions recorded yet.</Text>
+            </View>
           ) : (
-            recentSessions.map((s) => {
-              const min = Math.round(s.plannedMs / 60_000);
-              const modeGlyph = s.mode === 'sleep' ? '☾' : '☼';
-              const stateChange = s.preState && s.postState ? `${s.preState} → ${s.postState}` : '';
-
-              return (
-                <View key={s.id} style={styles.sessionRow}>
-                  <View style={styles.sessionLeft}>
-                    <Text style={styles.sessionDay}>{s.localDay}</Text>
-                    <Text style={styles.sessionDetails}>
-                      {min} min {modeGlyph} {stateChange ? `· State: ${stateChange}` : ''}
-                    </Text>
-                  </View>
-                  <View style={styles.sessionRight}>
-                    {s.accessVia === 'pro' && (
-                      <View style={styles.proMicroBadge}>
-                        <Text style={styles.proMicroText}>PRO</Text>
-                      </View>
-                    )}
-                    <Text style={styles.sessionStatus}>{s.status}</Text>
-                  </View>
-                </View>
-              );
-            })
+            <View style={styles.sessionList}>
+              {sessions.map((s) => (
+                <SessionRow key={s.id} session={s} todayKey={today} yesterdayKey={yesterdayKey} />
+              ))}
+            </View>
           )}
 
-          {!isPro && (
-            <Pressable
-              style={styles.proHistoryTeaser}
-              onPress={() => {
-                closeSheet();
-                openSheet('paywall', { paywallVariant: 'insights' });
-              }}
-            >
-              <Text style={styles.teaserText}>Unlock full history &amp; insights 🔒 PRO</Text>
-            </Pressable>
-          )}
+          {!isPro && <ProInsightsTeaser />}
         </View>
 
-        {/* Membership Card */}
-        <View style={styles.membershipCard}>
-          <View>
-            <Text style={styles.membershipTitle}>Membership</Text>
-            <Text style={styles.membershipStatus}>
-              {isPro ? 'Pro · Active' : activePass ? 'Free Pass · Active' : 'Ember Free'}
+        {/* 6. Gentle Notification Toggle */}
+        <View style={styles.reminderCard}>
+          <View style={styles.reminderTextGroup}>
+            <Text style={styles.reminderTitle}>Gentle Daily Reminder</Text>
+            <Text style={styles.reminderSubtitle}>
+              One silent notification a day at your learned rest hour.
             </Text>
           </View>
-          {!isPro && (
-            <Pressable
-              style={styles.upgradeBtn}
-              onPress={() => {
-                closeSheet();
-                openSheet('paywall', { paywallVariant: 'settings' });
-              }}
-            >
-              <Text style={styles.upgradeBtnText}>Upgrade</Text>
-            </Pressable>
-          )}
+          <Switch
+            value={preferences.notificationsEnabled}
+            onValueChange={handleToggleReminder}
+            trackColor={{ false: colors.surfaceRaised, true: colors.accentSoft }}
+            thumbColor={preferences.notificationsEnabled ? colors.accent : colors.textMuted}
+            accessibilityLabel="Toggle gentle daily reminder"
+          />
         </View>
+
+        {/* 7. Membership & Voices Card */}
+        <MembershipCard
+          isPro={isPro}
+          activePass={activePass}
+          activeVoiceId={preferences.selectedVoiceId}
+        />
 
         <View style={styles.footerSpace} />
       </ScrollView>
@@ -251,15 +188,19 @@ const styles = StyleSheet.create({
   },
   sheetTitle: {
     ...typography.title,
+    fontSize: 22,
+    lineHeight: 28,
     color: colors.text,
   },
   closeBtn: {
     width: 36,
     height: 36,
-    borderRadius: radii.pill,
+    borderRadius: 18,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   closeBtnText: {
     color: colors.textMuted,
@@ -269,254 +210,72 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: spacing.xxl,
+    gap: spacing.lg,
+    paddingBottom: spacing.xxxl,
   },
-  streakHeader: {
-    flexDirection: 'row',
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: radii.card,
-    padding: spacing.base,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
-  streakStat: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  historySection: {
     gap: spacing.sm,
   },
-  emberRing: {
-    width: 24,
-    height: 24,
-    borderRadius: radii.pill,
-    borderWidth: 1.5,
-    borderColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emberCore: {
-    width: 8,
-    height: 8,
-    borderRadius: radii.pill,
-    backgroundColor: colors.accent,
-  },
-  streakNumber: {
-    ...typography.title,
-    color: colors.text,
-  },
-  streakNumberSmall: {
-    ...typography.label,
-    color: colors.text,
-  },
-  statSublabel: {
-    ...typography.caption,
-    color: colors.textMuted,
-    fontSize: 11,
-  },
-  graceDotsRow: {
+  historyHeader: {
     flexDirection: 'row',
-    gap: 4,
-  },
-  graceDot: {
-    width: 10,
-    height: 10,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    backgroundColor: 'transparent',
-  },
-  graceDotBanked: {
-    backgroundColor: colors.accent,
-  },
-  section: {
-    marginBottom: spacing.xl,
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   sectionTitle: {
     ...typography.label,
     color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: spacing.sm,
-  },
-  heatmapGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: radii.card,
-    padding: spacing.base,
-  },
-  heatmapCell: {
-    width: 16,
-    height: 16,
-    borderRadius: 3,
-  },
-  heatmapTodayCell: {
-    borderWidth: 1,
-    borderColor: colors.accentSoft,
-  },
-  heatmapLegend: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-  },
-  legendText: {
-    ...typography.caption,
-    color: colors.textFaint,
-    fontSize: 10,
-  },
-  legendCell: {
-    width: 10,
-    height: 10,
-    borderRadius: 2,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: radii.card,
-    padding: spacing.base,
-    marginBottom: spacing.lg,
-  },
-  statBox: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statValue: {
-    ...typography.displaySm,
-    color: colors.accent,
-  },
-  statLabel: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: colors.border,
-  },
-  insightCard: {
-    backgroundColor: colors.surfaceRaised,
-    borderColor: colors.accent,
-    borderWidth: 1,
-    borderRadius: radii.card,
-    padding: spacing.base,
-    marginBottom: spacing.xl,
-  },
-  insightHeader: {
-    ...typography.label,
-    color: colors.accent,
-    fontWeight: '600',
-    marginBottom: spacing.xs,
-  },
-  insightBody: {
-    ...typography.body,
-    color: colors.text,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  logHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
+    fontSize: 13,
+    letterSpacing: 0.5,
   },
   freeLimitTag: {
     ...typography.caption,
-    color: colors.textFaint,
     fontSize: 11,
+    color: colors.textFaint,
+  },
+  sessionList: {
+    gap: spacing.xs,
+  },
+  emptyBox: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    alignItems: 'center',
   },
   emptyText: {
     ...typography.body,
-    color: colors.textFaint,
-    fontStyle: 'italic',
-    paddingVertical: spacing.md,
+    fontSize: 13,
+    color: colors.textMuted,
   },
-  sessionRow: {
+  reminderCard: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    borderRadius: radii.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    gap: spacing.md,
   },
-  sessionLeft: {
+  reminderTextGroup: {
+    flex: 1,
     gap: 2,
   },
-  sessionDay: {
-    ...typography.label,
+  reminderTitle: {
+    ...typography.title,
+    fontSize: 14,
     color: colors.text,
+    fontWeight: '600',
   },
-  sessionDetails: {
+  reminderSubtitle: {
     ...typography.caption,
-    color: colors.textMuted,
-  },
-  sessionRight: {
-    alignItems: 'flex-end',
-    gap: 4,
-  },
-  proMicroBadge: {
-    backgroundColor: colors.accent,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: radii.pill,
-  },
-  proMicroText: {
-    fontSize: 9,
-    color: colors.onAccent,
-    fontWeight: '700',
-  },
-  sessionStatus: {
-    ...typography.caption,
-    color: colors.textFaint,
     fontSize: 11,
-  },
-  proHistoryTeaser: {
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  teaserText: {
-    ...typography.label,
-    color: colors.accent,
-  },
-  membershipCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: radii.card,
-    padding: spacing.base,
-  },
-  membershipTitle: {
-    ...typography.caption,
+    lineHeight: 15,
     color: colors.textMuted,
-  },
-  membershipStatus: {
-    ...typography.label,
-    color: colors.text,
-    fontWeight: '600',
-  },
-  upgradeBtn: {
-    backgroundColor: colors.accent,
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button,
-  },
-  upgradeBtnText: {
-    ...typography.label,
-    color: colors.onAccent,
-    fontWeight: '600',
   },
   footerSpace: {
-    height: 40,
+    height: spacing.xl,
   },
 });

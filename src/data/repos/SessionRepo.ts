@@ -9,8 +9,10 @@ import {
   FREE_PASS_MAX_LIFETIME,
   MORNING_CHECKIN_WINDOW_MS,
   type AmbientBedId,
+  type PerceivedState,
   type ProtocolId,
 } from '../../domain/constants';
+import type { DetailedPairedSession } from '../../domain/calmDelta';
 import { addDays } from '../../domain/dayKey';
 import { applyCredit, qualifiesForFreePass, type CreditResult } from '../../domain/streakEngine';
 import type { Db } from '../db';
@@ -205,6 +207,45 @@ export class SessionRepo {
       minutes: row?.minutes ?? 0,
       sessions: row?.sessions ?? 0,
     };
+  }
+
+  getPairedSessions(): DetailedPairedSession[] {
+    const rows = this.db.all<RawSessionRow>(
+      `SELECT * FROM session_logs
+       WHERE status = 'completed' AND pre_state IS NOT NULL AND post_state IS NOT NULL
+       ORDER BY started_at_ms DESC;`,
+    );
+    return rows.map((r) => ({
+      protocolId: r.protocol_id as ProtocolId,
+      preState: r.pre_state as PerceivedState,
+      postState: r.post_state as PerceivedState,
+      startedAtMs: r.started_at_ms,
+      voiceId: r.voice_id,
+      mode: r.mode,
+    }));
+  }
+
+  getRecentCommitMinutes(days = 14, nowMs = Date.now()): number[] {
+    const cutoffMs = nowMs - days * 86_400_000;
+    const rows = this.db.all<{ started_at_ms: number; tz_offset_min: number }>(
+      QUERIES.GET_LEARNED_REMINDER_COMMITS,
+      [cutoffMs],
+    );
+    return rows.map((r) => {
+      const localEpochMs = r.started_at_ms + r.tz_offset_min * 60_000;
+      const d = new Date(localEpochMs);
+      return d.getUTCHours() * 60 + d.getUTCMinutes();
+    });
+  }
+
+  getSleepSessionCount(days = 7, nowMs = Date.now()): number {
+    const cutoffMs = nowMs - days * 86_400_000;
+    const row = this.db.first<{ count: number }>(
+      `SELECT COUNT(*) as count FROM session_logs
+       WHERE status = 'completed' AND mode = 'sleep' AND started_at_ms >= ?;`,
+      [cutoffMs],
+    );
+    return row?.count ?? 0;
   }
 
   getMorningCheckinCandidate(
