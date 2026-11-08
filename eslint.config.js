@@ -15,4 +15,10 @@ module.exports = [
       '*.generated.*',
     ],
   },
+  {
+    files: ['tools/**'],
+    rules: {
+      'expo/no-dynamic-env-var': 'off',
+    },
+  },
 ];

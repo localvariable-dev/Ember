@@ -1,0 +1,100 @@
+{
+  "id": "afternoon_recharge_10",
+  "targetMs": 600000,
+  "voice": { "speed": 0.9, "profile": "warm-calm-young-adult" },
+  "blocks": [
+    {
+      "id": "arrival",
+      "cue": { "type": "body", "label": "Arrival & intent" },
+      "durationMs": 45000,
+      "segments": [
+        {
+          "text": "This is a recharge, not a sleep. Settle comfortably.",
+          "atMs": 1000
+        },
+        {
+          "text": "Set your intention to rest deeply while remaining lightly awake.",
+          "atMs": 18000
+        }
+      ]
+    },
+    {
+      "id": "breath_slowing",
+      "cue": {
+        "type": "breath",
+        "label": "Slow breath",
+        "pattern": {
+          "inhaleMs": 4000,
+          "holdMs": 0,
+          "exhaleMs": 6000,
+          "hold2Ms": 0
+        }
+      },
+      "durationMs": 90000,
+      "segments": [
+        { "text": "Begin to slow the breath. Inhale four, exhale six.", "atMs": 0 },
+        { "text": "Let every exhale soften your shoulders and back.", "atMs": 35000 },
+        { "text": "Continuing smoothly and rhythmically.", "atMs": 65000 }
+      ]
+    },
+    {
+      "id": "body_scan",
+      "cue": { "type": "body", "label": "Body rotation" },
+      "durationMs": 300000,
+      "segments": [
+        { "text": "Bring attention to your feet and calves. Soften.", "atMs": 0 },
+        { "text": "Thighs and hips, releasing tension downward.", "atMs": 50000 },
+        { "text": "Lower back, belly, and chest. Heavy and resting.", "atMs": 100000 },
+        { "text": "Hands, wrists, forearms, and shoulders.", "atMs": 150000 },
+        { "text": "Neck, jaw, eyes, and brow. Entirely unheld.", "atMs": 200000 },
+        { "text": "The entire body resting as one whole.", "atMs": 250000 }
+      ]
+    },
+    {
+      "id": "bright_awareness",
+      "cue": {
+        "type": "breath",
+        "label": "Bright awareness",
+        "pattern": {
+          "inhaleMs": 5000,
+          "holdMs": 0,
+          "exhaleMs": 5000,
+          "hold2Ms": 0
+        }
+      },
+      "durationMs": 75000,
+      "segments": [
+        { "text": "The body stays deeply heavy, but attention clears.", "atMs": 0 },
+        { "text": "Notice the quiet clarity behind your resting eyes.", "atMs": 35000 }
+      ]
+    }
+  ],
+  "outro": {
+    "durationMs": 90000,
+    "focus": [
+      {
+        "id": "outro_focus",
+        "cue": { "type": "outro", "label": "Rise and awaken" },
+        "durationMs": 90000,
+        "segments": [
+          { "text": "Deepen your breath now.", "atMs": 0 },
+          { "text": "Wiggle fingers and toes, gently reawakening.", "atMs": 15000 },
+          { "text": "Stretch when you are ready, and open your eyes.", "atMs": 35000 }
+        ]
+      }
+    ],
+    "sleep": [
+      {
+        "id": "outro_sleep",
+        "cue": { "type": "outro", "label": "Drifting to sleep" },
+        "durationMs": 90000,
+        "segments": [
+          {
+            "text": "Nothing more to do. Let yourself drift. You can sleep now.",
+            "atMs": 0
+          }
+        ]
+      }
+    ]
+  }
+}

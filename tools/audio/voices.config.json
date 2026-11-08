@@ -1,0 +1,28 @@
+{
+  "baseUrl": "http://127.0.0.1:8000",
+  "endpoint": "/v1/audio/speech",
+  "responseFormat": "wav",
+  "apiKeyEnv": "VOICESTUDIO_API_KEY",
+  "voices": {
+    "maya_warm": {
+      "name": "Maya",
+      "subtitle": "Warm & unhurried · en-IN",
+      "locale": "en-IN",
+      "tier": "free",
+      "delivery": "bundled",
+      "model": "tts-1-hd",
+      "voice": "maya_v1",
+      "speed": 0.9
+    },
+    "arjun_deep": {
+      "name": "Arjun",
+      "subtitle": "Deep & steady evening voice · en-IN",
+      "locale": "en-IN",
+      "tier": "pro",
+      "delivery": "bundled",
+      "model": "tts-1-hd",
+      "voice": "arjun_v1",
+      "speed": 0.88
+    }
+  }
+}

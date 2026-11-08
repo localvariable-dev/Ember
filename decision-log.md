@@ -23,6 +23,7 @@ This document tracks all significant product, architectural, technical, and engi
 - [ADR-013: SQLite Persistence Architecture, Repositories & Idempotent Session Transactions](#adr-013-sqlite-persistence-architecture-repositories--idempotent-session-transactions)
 - [ADR-014: Schema Reconciliation, Catalogue Alignment & Free Pass Entitlement Integrity](#adr-014-schema-reconciliation-catalogue-alignment--free-pass-entitlement-integrity)
 - [ADR-015: Sanctuary Experience, Responsive Layout, and Root SheetHost Integration](#adr-015-sanctuary-experience-responsive-layout-and-root-sheethost-integration)
+- [ADR-016: Audio Asset Pipeline, Main.wav Mastering, Offline Asset Management & Asset Registry](#adr-016-audio-asset-pipeline-mainwav-mastering-offline-asset-management--asset-registry)
 
 ---
 
@@ -334,3 +335,43 @@ This document tracks all significant product, architectural, technical, and engi
 - **Architectural Impact:**
   - Added full test coverage in `__tests__/features/sanctuary.test.ts`. Total test suite expanded to 14 test suites, 117 tests passing across both IST (`Asia/Kolkata`) and EST (`America/New_York`).
   - Zero TypeScript errors (`npx tsc --noEmit`), zero ESLint warnings (`npm run lint`), 100% Prettier formatting compliance.
+
+---
+
+## Phase 4: Audio Asset Pipeline & Offline Asset Management
+
+### ADR-016: Audio Asset Pipeline, Main.wav Mastering, Offline Asset Management & Asset Registry
+
+- **Date:** 2026-11-08
+- **Status:** Accepted
+- **Context:** Following the implementation of Sanctuary UI and navigation in Phase 3, Phase 4 requires building the audio asset infrastructure and offline asset delivery systems according to Ember Master Plan Part 5:
+  1. An existing candidate studio recording for Rapid Reset 5 (`Voices/Main.wav`) exists in the workspace. Its original recording integrity must be 100% preserved and never destructively modified.
+  2. The candidate recording must be verified against technical broadcast standards (duration ~300s, -18.0 LUFS integrated loudness, $\le -1.5$ dBTP true peak, LRA $\le 7$ LU) and mastered into an Android-optimized Opus asset (`assets/audio/voice/maya_warm/rapid_reset_5.ogg`, Opus 32 kbps mono, 48 kHz, size $\le 1.4$ MB).
+  3. Real studio recordings for the 10-minute (`afternoon_recharge_10`) and 30-minute (`deep_rest_30`) sessions do not exist yet. Fabricating fake narration or pretending recordings exist is strictly prohibited. An explicit development placeholder strategy is required, with embedded metadata tags (`comment=EMBER_DEV_PLACEHOLDER_NOT_FOR_RELEASE`) and release verification tooling that strictly rejects placeholder audio.
+  4. Ambient soundscapes (Rain, Brown Noise, Ocean Drift, Night Forest in 96 kbps Opus; 6 Hz Theta & 2 Hz Delta in 22.05 kHz stereo lossless FLAC) and a 3.2s rising harmonic chime (`assets/audio/chime_rise.wav`) must be synthesized and packaged within strict individual and total bundle budgets ($\le 42$ MB total).
+  5. An asset registry and offline download architecture (`OfflineAudioManager`) must be implemented to manage downloads, exponential backoff retries, `.tmp` staging, atomic renames, SHA-256 validation, and corrupted file auto-pruning.
+- **Decision:**
+  1. **`Main.wav` Technical Verification & Preservation:**
+     - Verified source file at `/Users/sam/Documents/Projects/Nidra/Voices/Main.wav`: PCM 16-bit little-endian mono (`pcm_s16le`), 24,000 Hz, 14,388,120 bytes, 299.75 seconds. Integrated loudness $-20.66$ LUFS, true peak $-1.99$ dBTP, LRA $6.70$ LU ($\le 7$ LU).
+     - Fixed SHA-256 hash verified and monitored by automated test: `4a1f411ba472cb0f66687ea6e1f6dbef666370f884bd31677586fa0d6a868991`.
+     - Mastered candidate playback asset: `assets/audio/voice/maya_warm/rapid_reset_5.ogg` (300.0s, Opus 32 kbps mono, 48 kHz, $-18.0$ LUFS, true peak $\le -1.5$ dBTP, size: 876,826 bytes $\le 1.4$ MB budget, SHA-256: `5370a4127a1838ef9353ff419cefe60520fc8d7379766bb94f3ba79b977e1806`).
+  2. **Missing Narration & Release Guardrails:**
+     - Missing 10m and 30m voice tracks generated as lightweight development placeholders using `tools/audio/make-placeholders.mjs`, encoded at 20 kbps Opus with comment metadata `EMBER_DEV_PLACEHOLDER_NOT_FOR_RELEASE`.
+     - `tools/audio/verify-assets.mjs` checks all 17 assets. In `--release` mode, it scans file buffers and rejects any placeholder asset with non-zero exit code (verified in tests and CI).
+  3. **Ambient Bed & Chime Generation (`tools/audio/`):**
+     - Pure Node harmonic chime generator (`make-chime.mjs`) creates 3.2s rising harmonic chime (44.1 kHz 16-bit mono WAV, 282 KB $\le 0.3$ MB budget).
+     - Noise and binaural generator (`make-beds.mjs`) creates 4 noise loops (Rain, Brown Noise, Ocean Drift, Night Forest at ~650 KB $\le 0.8$ MB) and 2 phase-exact 24s binaural loops in 22.05 kHz stereo FLAC (Theta 6 Hz, Delta 2 Hz at 608 KB $\le 3.5$ MB).
+     - Total bundled audio package measures 40.58 MB, well within the 42 MB threshold.
+  4. **Runtime Asset Registry (`src/audio/assetRegistry*.ts`):**
+     - Implemented `assetRegistry.ts` defining `VoiceTrackMetadata`, `AmbientBedMetadata`, `ChimeMetadata`, `ProtocolAudioMetadata`, and `verifySha256`.
+     - `assetRegistry.generated.ts` registers all canonical protocols, soundscape beds, and voice tracks with duration, byte size, SHA-256 checksums, and cue timeline markers. Maya Rapid Reset 5 is flagged `isPlaceholder: false`; all missing recordings are flagged `isPlaceholder: true`.
+  5. **Offline Audio Manager (`src/audio/OfflineAudioManager.ts`):**
+     - Manages progressive voice pack downloads with configurable exponential backoff retry (up to 3 retries, base delay 1000 ms, factor 2).
+     - Staging pattern: downloads to `.tmp` files, verifies SHA-256 checksum against registry, and executes atomic file rename on match. Corrupted downloads are purged immediately.
+     - Supports both React Native Expo filesystem (`expo-file-system`) and headless testing mock drivers (`FileSystemDriver`).
+- **Rationale:**
+  - Guarantees zero data loss, bit-for-bit master file preservation, and adherence to Android offline-first standards.
+  - Prevents shipping mock/placeholder assets to production through fail-fast build verification.
+- **Architectural Impact:**
+  - Expanded test suite to 18 test suites and 145 tests passing in < 1.4s across all timezones.
+  - Zero TypeScript errors (`npx tsc --noEmit`), zero ESLint warnings (`eslint --max-warnings 0`), 100% Prettier formatting compliance.

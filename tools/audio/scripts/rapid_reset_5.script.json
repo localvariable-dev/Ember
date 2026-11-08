@@ -1,0 +1,141 @@
+{
+  "id": "rapid_reset_5",
+  "targetMs": 300000,
+  "voice": { "speed": 0.9, "profile": "warm-calm-young-adult" },
+  "blocks": [
+    {
+      "id": "settle",
+      "cue": { "type": "body", "label": "Settle in" },
+      "durationMs": 24000,
+      "segments": [
+        {
+          "text": "Welcome. For the next five minutes, there is nothing to figure out.",
+          "atMs": 1000
+        },
+        {
+          "text": "Let your eyes close, or rest your gaze softly on one spot.",
+          "atMs": 9000
+        },
+        {
+          "text": "Feel the weight of your body being held by whatever is beneath you.",
+          "atMs": 16000
+        }
+      ]
+    },
+    {
+      "id": "sigh_primer",
+      "cue": { "type": "body", "label": "The physiological sigh" },
+      "durationMs": 16000,
+      "segments": [
+        { "text": "We'll begin with two physiological sighs.", "atMs": 0 },
+        {
+          "text": "A double breath in through the nose, then a long, slow breath out through the mouth.",
+          "atMs": 4500
+        }
+      ]
+    },
+    {
+      "id": "sigh_1",
+      "cue": { "type": "sigh", "label": "Sigh" },
+      "durationMs": 10000,
+      "segments": [
+        { "text": "In through the nose.", "atMs": 0 },
+        { "text": "A little more.", "atMs": 2200 },
+        { "text": "Now out, long and slow.", "atMs": 3400 }
+      ]
+    },
+    {
+      "id": "sigh_2",
+      "cue": { "type": "sigh", "label": "Sigh" },
+      "durationMs": 10000,
+      "segments": [
+        { "text": "Again. In through the nose.", "atMs": 0 },
+        { "text": "A little more.", "atMs": 2200 },
+        { "text": "And out, all the way.", "atMs": 3400 }
+      ]
+    },
+    {
+      "id": "normalize",
+      "cue": { "type": "body", "label": "Let it return" },
+      "durationMs": 8000,
+      "segments": [
+        { "text": "Let your breathing return to normal.", "atMs": 0 },
+        { "text": "Notice how your body feels.", "atMs": 4500 }
+      ]
+    },
+    {
+      "id": "release",
+      "cue": { "type": "release", "label": "Squeeze and drop" },
+      "durationMs": 60000,
+      "segments": [
+        { "text": "Now we'll release the upper body, quickly.", "atMs": 0 },
+        {
+          "text": "Lift your shoulders toward your ears. Squeeze. And drop.",
+          "atMs": 5000
+        },
+        { "text": "Clench your jaw. Hold. And let it go.", "atMs": 14000 },
+        { "text": "Make fists. Tight. And open your hands.", "atMs": 23000 },
+        { "text": "Scrunch your whole face. And soften.", "atMs": 32000 },
+        { "text": "Draw your chest up and back. And release.", "atMs": 41000 },
+        { "text": "Let your belly be soft.", "atMs": 50000 }
+      ]
+    },
+    {
+      "id": "slow_breath",
+      "cue": {
+        "type": "breath",
+        "label": "In four, out six",
+        "pattern": {
+          "inhaleMs": 4000,
+          "holdMs": 0,
+          "exhaleMs": 6000,
+          "hold2Ms": 0
+        }
+      },
+      "durationMs": 70000,
+      "segments": [
+        { "text": "Now let the breath slow down.", "atMs": 0 },
+        {
+          "text": "In through the nose for four. And out for six.",
+          "atMs": 6000
+        },
+        {
+          "text": "A longer breath out tells your body it is safe.",
+          "atMs": 32000
+        },
+        { "text": "Keep going, in your own time.", "atMs": 54000 }
+      ]
+    },
+    {
+      "id": "stillness",
+      "cue": { "type": "body", "label": "Rest" },
+      "durationMs": 52000,
+      "segments": [
+        { "text": "Let go of counting.", "atMs": 0 },
+        {
+          "text": "Notice what has shifted: the jaw, the shoulders, the breath.",
+          "atMs": 8000
+        },
+        { "text": "There is nothing to do. Just rest.", "atMs": 26000 },
+        { "text": "Stay here a little longer.", "atMs": 42000 }
+      ]
+    },
+    {
+      "id": "return",
+      "cue": { "type": "body", "label": "Coming back" },
+      "segments": [
+        { "text": "Take one deeper breath in.", "pauseAfterMs": 3500 },
+        { "text": "And sigh it out.", "pauseAfterMs": 5000 },
+        {
+          "text": "Gently begin to move your fingers and toes.",
+          "pauseAfterMs": 6000
+        },
+        {
+          "text": "Whenever you're ready, open your eyes.",
+          "pauseAfterMs": 5000
+        },
+        { "text": "Carry this steadiness with you.", "pauseAfterMs": 0 }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,175 @@
+{
+  "id": "deep_rest_30",
+  "targetMs": 1800000,
+  "voice": { "speed": 0.88, "profile": "warm-calm-young-adult" },
+  "blocks": [
+    {
+      "id": "settle_sankalpa",
+      "cue": { "type": "body", "label": "Settle & intention" },
+      "durationMs": 150000,
+      "segments": [
+        {
+          "text": "Lie down flat on your back in shavasana. Allow your entire body to become completely still.",
+          "atMs": 1000
+        },
+        {
+          "text": "State your heartfelt intention or Sankalpa silently three times.",
+          "atMs": 60000
+        }
+      ]
+    },
+    {
+      "id": "breath_awareness",
+      "cue": {
+        "type": "breath",
+        "label": "Lengthen exhale",
+        "pattern": {
+          "inhaleMs": 4000,
+          "holdMs": 0,
+          "exhaleMs": 7000,
+          "hold2Ms": 0
+        }
+      },
+      "durationMs": 180000,
+      "segments": [
+        {
+          "text": "Become aware of your natural breathing. Inhale for four, exhale slowly for seven.",
+          "atMs": 0
+        },
+        {
+          "text": "Each prolonged exhale invites deeper surrender into the ground.",
+          "atMs": 70000
+        }
+      ]
+    },
+    {
+      "id": "rotation",
+      "cue": { "type": "body", "label": "Rotation of consciousness" },
+      "durationMs": 600000,
+      "segments": [
+        {
+          "text": "Rotate your awareness systematically through the right side of the body: hand, arm, shoulder, waist, leg, foot.",
+          "atMs": 0
+        },
+        {
+          "text": "Now the left side of the body: hand, arm, shoulder, waist, leg, foot.",
+          "atMs": 150000
+        },
+        {
+          "text": "The back of the body: heels, calves, buttocks, spine, shoulder blades, back of the head.",
+          "atMs": 300000
+        },
+        {
+          "text": "The front of the body: crown, forehead, eyebrows, eyes, throat, chest, navel.",
+          "atMs": 450000
+        }
+      ]
+    },
+    {
+      "id": "counting",
+      "cue": {
+        "type": "breath",
+        "label": "Breath counting",
+        "pattern": {
+          "inhaleMs": 5000,
+          "holdMs": 0,
+          "exhaleMs": 5000,
+          "hold2Ms": 0
+        }
+      },
+      "durationMs": 240000,
+      "segments": [
+        {
+          "text": "Now count your breaths backwards from 27 down to 1. Inhale 27, exhale 27. Inhale 26, exhale 26.",
+          "atMs": 0
+        },
+        {
+          "text": "If you lose count, begin again gently from 27.",
+          "atMs": 90000
+        }
+      ]
+    },
+    {
+      "id": "opposites",
+      "cue": { "type": "body", "label": "Sensation of opposites" },
+      "durationMs": 240000,
+      "segments": [
+        {
+          "text": "Awaken the sensation of intense heaviness throughout the entire body.",
+          "atMs": 0
+        },
+        {
+          "text": "Now evoke lightness. Feel as weightless as a feather floating above the ground.",
+          "atMs": 80000
+        },
+        {
+          "text": "Now warmth... and now soothing coolness.",
+          "atMs": 160000
+        }
+      ]
+    },
+    {
+      "id": "visualization",
+      "cue": { "type": "body", "label": "Visualization" },
+      "durationMs": 210000,
+      "segments": [
+        {
+          "text": "Visualize a calm, clear lake in early morning. Smooth as glass.",
+          "atMs": 0
+        },
+        {
+          "text": "Now an ember glowing gently in a dark hearth, steady and peaceful.",
+          "atMs": 90000
+        }
+      ]
+    },
+    {
+      "id": "sankalpa_dissolve",
+      "cue": { "type": "silence", "label": "Deep stillness" },
+      "durationMs": 90000,
+      "segments": [
+        {
+          "text": "Recall your Sankalpa once more. State it three times with feeling and certainty.",
+          "atMs": 0
+        }
+      ]
+    }
+  ],
+  "outro": {
+    "durationMs": 90000,
+    "focus": [
+      {
+        "id": "outro_focus",
+        "cue": { "type": "outro", "label": "Gentle awakening" },
+        "durationMs": 90000,
+        "segments": [
+          {
+            "text": "Slowly begin to deepen your breath. Feel the contact points of your body with the floor.",
+            "atMs": 0
+          },
+          {
+            "text": "Gently move your fingers and toes. Roll to your right side when you are ready.",
+            "atMs": 25000
+          },
+          {
+            "text": "Slowly open your eyes. The practice of Yoga Nidra is now complete.",
+            "atMs": 50000
+          }
+        ]
+      }
+    ],
+    "sleep": [
+      {
+        "id": "outro_sleep",
+        "cue": { "type": "outro", "label": "Sleep transition" },
+        "durationMs": 90000,
+        "segments": [
+          {
+            "text": "Remain completely relaxed. Let go of all effort. Rest and sleep.",
+            "atMs": 0
+          }
+        ]
+      }
+    ]
+  }
+}
