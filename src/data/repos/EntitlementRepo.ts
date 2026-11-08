@@ -77,6 +77,7 @@ export class EntitlementRepo {
   }
 
   getActivePass(nowMs = Date.now()): UserEntitlement | null {
+    this.expireStalePasses(nowMs);
     const row = this.db.first<RawEntitlementRow>(
       `SELECT * FROM user_entitlements
        WHERE kind = 'free_pass'
@@ -91,6 +92,27 @@ export class EntitlementRepo {
 
   hasAvailablePass(nowMs = Date.now()): boolean {
     return this.getActivePass(nowMs) !== null;
+  }
+
+  expireStalePasses(nowMs = Date.now()): number {
+    const res = this.db.run(
+      `
+      UPDATE user_entitlements
+      SET status = 'expired'
+      WHERE kind = 'free_pass'
+        AND status = 'available'
+        AND expires_at_ms IS NOT NULL
+        AND expires_at_ms <= ?;
+      `,
+      [nowMs],
+    );
+    return res.changes;
+  }
+
+  consumePassForSession(sessionId: string, nowMs = Date.now()): boolean {
+    const pass = this.getActivePass(nowMs);
+    if (!pass) return false;
+    return this.consumeFreePass(pass.id, sessionId, nowMs);
   }
 
   countPassesGranted(): number {

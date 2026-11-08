@@ -12,7 +12,7 @@ interface RawProtocolRow {
   id: string;
   title: string;
   subtitle: string;
-  minutes: number;
+  minutes: 5 | 10 | 30;
   planned_ms: number;
   tier: Tier;
   supports_modes: number;

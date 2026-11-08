@@ -8,6 +8,17 @@ export const PROTOCOL_IDS = ['rapid_reset_5', 'afternoon_recharge_10', 'deep_res
 
 export type ProtocolId = (typeof PROTOCOL_IDS)[number];
 
+export const AMBIENT_BED_IDS = [
+  'rain',
+  'brown_noise',
+  'theta_6hz',
+  'ocean_drift',
+  'night_forest',
+  'delta_2hz',
+] as const;
+
+export type AmbientBedId = (typeof AMBIENT_BED_IDS)[number];
+
 export const PLANNED_MS: Record<ProtocolId, number> = {
   rapid_reset_5: 300_000,
   afternoon_recharge_10: 600_000,

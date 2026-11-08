@@ -80,6 +80,7 @@ describe('Database & Migrations', () => {
     );
     expect(beds.length).toBe(6);
     expect(beds.find((b) => b.id === 'rain')?.tier).toBe('free');
+    expect(beds.find((b) => b.id === 'theta_6hz')?.tier).toBe('free');
     expect(beds.find((b) => b.id === 'theta_6hz')?.is_binaural).toBe(1);
     expect(beds.find((b) => b.id === 'delta_2hz')?.tier).toBe('pro');
   });
@@ -89,18 +90,55 @@ describe('Database & Migrations', () => {
 
     const firstRun = migrate(db);
     expect(firstRun.previousVersion).toBe(0);
-    expect(firstRun.newVersion).toBe(1);
+    expect(firstRun.newVersion).toBe(2);
 
     // Run again
     const secondRun = migrate(db);
-    expect(secondRun.previousVersion).toBe(1);
-    expect(secondRun.newVersion).toBe(1);
+    expect(secondRun.previousVersion).toBe(2);
+    expect(secondRun.newVersion).toBe(2);
 
     // Singletons still exist with single row
     const streakCount = db.first<{ count: number }>(
       'SELECT COUNT(*) as count FROM streak_state;',
     )!.count;
     expect(streakCount).toBe(1);
+  });
+
+  it('upgrades an existing database from migration 1 to migration 2 preserving user data', () => {
+    const db = openTestDatabase(':memory:');
+    // Run only migration 1
+    MIGRATIONS[0]!.up(db);
+    db.exec('PRAGMA user_version = 1;');
+
+    // Manually force theta_6hz to 'pro' as in previous v1 commit
+    db.run(`UPDATE ambient_beds SET tier = 'pro' WHERE id = 'theta_6hz';`);
+
+    // Insert user session to verify preservation
+    db.run(`
+      INSERT INTO session_logs (
+        id, protocol_id, voice_id, mode, access_via, started_at_ms,
+        local_day, tz_offset_min, planned_ms, status, created_at_ms
+      ) VALUES ('user_session_1', 'rapid_reset_5', 'maya_warm', 'focus', 'free', 1000, '2026-06-15', 330, 300000, 'completed', 1000);
+    `);
+
+    // Run migrate(db)
+    const upgradeResult = migrate(db);
+    expect(upgradeResult.previousVersion).toBe(1);
+    expect(upgradeResult.newVersion).toBe(2);
+
+    // Assert theta_6hz upgraded to free
+    const bed = db.first<{ tier: string }>('SELECT tier FROM ambient_beds WHERE id = ?;', [
+      'theta_6hz',
+    ]);
+    expect(bed?.tier).toBe('free');
+
+    // Assert historical user session preserved intact
+    const session = db.first<{ id: string; status: string }>(
+      'SELECT id, status FROM session_logs WHERE id = ?;',
+      ['user_session_1'],
+    );
+    expect(session?.id).toBe('user_session_1');
+    expect(session?.status).toBe('completed');
   });
 
   it('rolls back and preserves user_version if a migration transaction throws an error', () => {

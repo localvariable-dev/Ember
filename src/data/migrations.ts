@@ -211,7 +211,7 @@ export const MIGRATIONS: readonly Migration[] = [
         VALUES
           ('rain', 'Rain', 'free', 'bed_rain', 60000, 0, 1),
           ('brown_noise', 'Brown Noise', 'free', 'bed_brown_noise', 60000, 0, 2),
-          ('theta_6hz', '6 Hz Theta', 'pro', 'bed_theta_6hz', 24000, 1, 3),
+          ('theta_6hz', '6 Hz Theta', 'free', 'bed_theta_6hz', 24000, 1, 3),
           ('ocean_drift', 'Ocean Drift', 'pro', 'bed_ocean_drift', 60000, 0, 4),
           ('night_forest', 'Night Forest', 'pro', 'bed_night_forest', 60000, 0, 5),
           ('delta_2hz', '2 Hz Delta', 'pro', 'bed_delta_2hz', 24000, 1, 6);
@@ -233,6 +233,43 @@ export const MIGRATIONS: readonly Migration[] = [
       // 14. Initialize User Preferences singleton row (requires 'maya_warm' in voices)
       db.exec(`
         INSERT OR IGNORE INTO user_preferences (id, updated_at_ms) VALUES (1, 0);
+      `);
+    },
+  },
+  {
+    version: 2,
+    name: '002_reconcile_catalogues_and_entitlement_integrity',
+    up(db: Db): void {
+      // 1. Reconcile ambient beds tier for theta_6hz (free tier with binaural beats per Part 1 §1 & Part 3 §4.1)
+      db.run(`UPDATE ambient_beds SET tier = 'free' WHERE id = 'theta_6hz';`);
+
+      // 2. Ensure canonical ambient beds exist
+      db.exec(`
+        INSERT OR IGNORE INTO ambient_beds (id, title, tier, asset_key, loop_ms, is_binaural, sort_order)
+        VALUES
+          ('rain', 'Rain', 'free', 'bed_rain', 60000, 0, 1),
+          ('brown_noise', 'Brown Noise', 'free', 'bed_brown_noise', 60000, 0, 2),
+          ('theta_6hz', '6 Hz Theta', 'free', 'bed_theta_6hz', 24000, 1, 3),
+          ('ocean_drift', 'Ocean Drift', 'pro', 'bed_ocean_drift', 60000, 0, 4),
+          ('night_forest', 'Night Forest', 'pro', 'bed_night_forest', 60000, 0, 5),
+          ('delta_2hz', '2 Hz Delta', 'pro', 'bed_delta_2hz', 24000, 1, 6);
+      `);
+
+      // 3. Ensure canonical audio protocols exist (5, 10, 30 min)
+      db.exec(`
+        INSERT OR IGNORE INTO audio_protocols
+          (id, title, subtitle, minutes, planned_ms, tier, supports_modes, sigh_in_script, asset_version, sort_order)
+        VALUES
+          ('rapid_reset_5', 'Rapid Reset', '5 min · Acute stress & pre-meeting release', 5, 300000, 'free', 0, 1, 1, 1),
+          ('afternoon_recharge_10', 'Afternoon Recharge', '10 min · Circadian dip & baseline dopamine', 10, 600000, 'free', 0, 0, 1, 2),
+          ('deep_rest_30', 'Deep Rest & Yoga Nidra', '30 min · Parasympathetic reset & sleep debt', 30, 1800000, 'pro', 1, 0, 1, 3);
+      `);
+
+      // 4. Safely clean up any non-canonical protocols not referenced in historical sessions
+      db.run(`
+        DELETE FROM audio_protocols
+        WHERE id NOT IN ('rapid_reset_5', 'afternoon_recharge_10', 'deep_rest_30')
+          AND id NOT IN (SELECT DISTINCT protocol_id FROM session_logs);
       `);
     },
   },

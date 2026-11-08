@@ -4,7 +4,13 @@
  * SQLite persistence and transactional commit guarantees for Ember rest sessions.
  */
 
-import { MORNING_CHECKIN_WINDOW_MS, type ProtocolId } from '../../domain/constants';
+import {
+  FREE_PASS_CONSUME_AT,
+  FREE_PASS_MAX_LIFETIME,
+  MORNING_CHECKIN_WINDOW_MS,
+  type AmbientBedId,
+  type ProtocolId,
+} from '../../domain/constants';
 import { addDays } from '../../domain/dayKey';
 import { applyCredit, qualifiesForFreePass, type CreditResult } from '../../domain/streakEngine';
 import type { Db } from '../db';
@@ -29,7 +35,7 @@ interface RawSessionRow {
   protocol_id: string;
   voice_id: string;
   mode: Mode;
-  ambient_bed_id: string | null;
+  ambient_bed_id: AmbientBedId | null;
   sigh_pacer: number;
   access_via: AccessVia;
   started_at_ms: number;
@@ -134,15 +140,26 @@ export class SessionRepo {
   }
 
   heartbeat(id: string, positionMs: number, nowMs = Date.now()): void {
-    this.db.run(
-      `
-      UPDATE session_logs SET
-        heartbeat_at_ms = ?,
-        max_position_ms = MAX(max_position_ms, ?)
-      WHERE id = ?;
-      `,
-      [nowMs, positionMs, id],
-    );
+    this.db.tx(() => {
+      this.db.run(
+        `
+        UPDATE session_logs SET
+          heartbeat_at_ms = ?,
+          max_position_ms = MAX(max_position_ms, ?)
+        WHERE id = ?;
+        `,
+        [nowMs, positionMs, id],
+      );
+
+      const session = this.getById(id);
+      if (
+        session &&
+        session.accessVia === 'free_pass' &&
+        Math.max(session.maxPositionMs, positionMs) >= session.plannedMs * FREE_PASS_CONSUME_AT
+      ) {
+        this.entitlementRepo.consumePassForSession(session.id, nowMs);
+      }
+    });
   }
 
   setPreState(id: string, state: RecoveryState): void {
@@ -210,16 +227,27 @@ export class SessionRepo {
     listenedMs: number,
     endedAtMs = Date.now(),
   ): void {
-    this.db.run(
-      `
-      UPDATE session_logs SET
-        status = ?,
-        listened_ms = ?,
-        ended_at_ms = ?
-      WHERE id = ? AND committed_at_ms IS NULL;
-      `,
-      [status, listenedMs, endedAtMs, id],
-    );
+    this.db.tx(() => {
+      this.db.run(
+        `
+        UPDATE session_logs SET
+          status = ?,
+          listened_ms = ?,
+          ended_at_ms = ?
+        WHERE id = ? AND committed_at_ms IS NULL;
+        `,
+        [status, listenedMs, endedAtMs, id],
+      );
+
+      const session = this.getById(id);
+      if (
+        session &&
+        session.accessVia === 'free_pass' &&
+        listenedMs >= session.plannedMs * FREE_PASS_CONSUME_AT
+      ) {
+        this.entitlementRepo.consumePassForSession(session.id, endedAtMs);
+      }
+    });
   }
 
   /**
@@ -283,7 +311,14 @@ export class SessionRepo {
         this.ledgerRepo.markGrace(coveredDay);
       }
 
-      // 6. Free Pass ("3-Day Streak Taste") evaluation (§3.5)
+      // 6. Free Pass ("3-Day Streak Taste") evaluation & consumption (§3.5)
+      if (
+        session.accessVia === 'free_pass' &&
+        params.maxPositionMs >= session.plannedMs * FREE_PASS_CONSUME_AT
+      ) {
+        this.entitlementRepo.consumePassForSession(session.id, params.nowMs);
+      }
+
       // Only 5-min or 10-min sessions qualify
       let passGranted = false;
       const isShortProtocol =
@@ -294,7 +329,7 @@ export class SessionRepo {
         const lifetimePassCount = this.entitlementRepo.countPassesGranted();
         const hasAvailablePass = this.entitlementRepo.hasAvailablePass(params.nowMs);
 
-        if (!isPro && lifetimePassCount < 1 && !hasAvailablePass) {
+        if (!isPro && lifetimePassCount < FREE_PASS_MAX_LIFETIME && !hasAvailablePass) {
           // Check last 7 local calendar days for consecutive practice
           const cutoffDay = addDays(session.localDay, -6);
           const qualifyingDays = this.getQualifyingDaysSince(cutoffDay);

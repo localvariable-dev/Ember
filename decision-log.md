@@ -21,6 +21,7 @@ This document tracks all significant product, architectural, technical, and engi
 - [ADR-011: Pure Domain Segregation, Root SheetHost & Ephemeral State Architecture](#adr-011-pure-domain-segregation-root-sheethost--ephemeral-state-architecture)
 - [ADR-012: Phase 1 Domain Gap Closure, WCAG Automated Contrast & Jest Optimization](#adr-012-phase-1-domain-gap-closure-wcag-automated-contrast--jest-optimization)
 - [ADR-013: SQLite Persistence Architecture, Repositories & Idempotent Session Transactions](#adr-013-sqlite-persistence-architecture-repositories--idempotent-session-transactions)
+- [ADR-014: Schema Reconciliation, Catalogue Alignment & Free Pass Entitlement Integrity](#adr-014-schema-reconciliation-catalogue-alignment--free-pass-entitlement-integrity)
 
 ---
 
@@ -236,7 +237,7 @@ This document tracks all significant product, architectural, technical, and engi
   1. **Synchronous `Db` Interface Abstraction:** Created `src/data/db.ts` defining a synchronous database interface (`exec`, `run`, `all`, `first`, `tx`, `close`). Implemented `ExpoSqliteDb` wrapping `expo-sqlite` (`openDatabaseSync`, `withTransactionSync`, `execSync`, `runSync`, `getAllSync`, `getFirstSync`) and `BetterSqliteDb` wrapping `better-sqlite3`. Both enforce `journal_mode = WAL` and `foreign_keys = ON`.
   2. **Ordered Migration Framework (`PRAGMA user_version`):** Created `src/data/migrations.ts` executing linear schema migrations. Migration 1 constructs the complete 9-table relational schema:
      - `audio_protocols`, `voices`, `protocol_voice_tracks`, `ambient_beds`, `session_logs`, `day_ledger`, `streak_state`, `user_entitlements`, `user_preferences`.
-     - Seeded initial catalog rows: protocols (`rapid_reset_5`, `deep_rest_10`, `midday_reboot_20`, `rest_unwind_sleep_30`), voices (`maya_warm`, `arjun_whisper`, `elena_gentle`, `david_deep`), ambient beds (`rain_gentle`, `pink_noise`, `binaural_rest`, `none`), and bundled voice tracks. Catalogs are seeded prior to `user_preferences` to satisfy foreign-key constraints on `selected_voice_id`.
+     - Seeded initial catalog rows: protocols (`rapid_reset_5`, `afternoon_recharge_10`, `deep_rest_30`), voices (`maya_warm`, `arjun_deep`), ambient beds (`rain`, `brown_noise`, `theta_6hz`, `ocean_drift`, `night_forest`, `delta_2hz`), and bundled voice tracks. Catalogs are seeded prior to `user_preferences` to satisfy foreign-key constraints on `selected_voice_id`.
   3. **Domain-Driven Repositories:** Implemented clean repository layers in `src/data/repos/`:
      - `SessionRepo`: Complete session lifecycle (`createSession`, `updateProgress`, `recordCheckin`, `finalizeSession`, `commitSession`, `getById`, `getRecent`).
      - `StreakRepo`: Singleton streak state persistence (`get`, `save`).
@@ -261,4 +262,32 @@ This document tracks all significant product, architectural, technical, and engi
 - **Architectural Impact:**
   - Complete data layer ready for Phase 3 (audio playback engine) and Phase 4 (sanctuary and player UI).
   - Test suite grew to 12 test suites and 96 unit tests, running in < 0.6 seconds in CI.
+  - Zero TypeScript errors (`npx tsc --noEmit`), zero ESLint warnings (`eslint --max-warnings 0`), 100% Prettier formatting compliance.
+
+---
+
+### ADR-014: Schema Reconciliation, Catalogue Alignment & Free Pass Entitlement Integrity
+
+- **Date:** 2026-11-08
+- **Status:** Accepted
+- **Context:** Following the Phase 2 implementation audit (Prompt 2.1), discrepancies were audited against Master Plan v1.1 Parts 1, 2, 3, and 4:
+  1. The catalogue report previously mentioned obsolete/unsupported protocol IDs (`deep_rest_10`, `midday_reboot_20`, `rest_unwind_sleep_30`) and invented ambient names (`rain_gentle`, `pink_noise`, `binaural_rest`, `none`). The canonical protocols are strictly `rapid_reset_5`, `afternoon_recharge_10`, and `deep_rest_30`. The canonical ambient beds are `rain` (free), `brown_noise` (free), `theta_6hz` (free, binaural), `ocean_drift` (pro), `night_forest` (pro), and `delta_2hz` (pro, binaural).
+  2. In `ambient_beds` seed data, `theta_6hz` was mistakenly marked as `tier: 'pro'`. Per Part 1 §1 and Part 3 §4.1, 6 Hz Theta Waves is in the Free tier (with a one-time headphone recommendation hint).
+  3. Free Pass validity was misstated in the previous session summary as 24 hours. The actual product rule (Part 2 §3.5) specifies: 14 days validity, maximum of 1 grant per lifetime (`FREE_PASS_MAX_LIFETIME = 1`), consumption at 20% of the 30-minute session (6:00), and zero redundant grants for active Pro users.
+  4. Migration framework needed forward migration (`002_reconcile_catalogues_and_entitlement_integrity`) advancing `PRAGMA user_version` to 2 to safely update existing local databases without data loss or remapping.
+- **Decision:**
+  1. **Canonical Catalogues & Type Safety:** Reconciled `src/domain/constants.ts` and `src/data/types.ts` with canonical `AMBIENT_BED_IDS` and `PROTOCOL_IDS`. Typed `AudioProtocol.minutes` as `5 | 10 | 30`, `AmbientBed.id` as `AmbientBedId`, and `UserPreferences.ambientBedId` as `AmbientBedId | null`.
+  2. **Migration 2 Deployment:** Added Migration 2 reconciling `ambient_beds` (`UPDATE ambient_beds SET tier = 'free' WHERE id = 'theta_6hz'`), inserting missing canonical catalogue rows, and cleaning up unreferenced non-canonical protocols while strictly preserving any historical session logs.
+  3. **Free Pass Business Rules Enforcement:**
+     - Enforced 14-day validity (`FREE_PASS_VALID_DAYS = 14`, `expiresAtMs = nowMs + 14 * 86_400_000`).
+     - Enforced lifetime limit (`lifetimePassCount < FREE_PASS_MAX_LIFETIME`) within the atomic commit transaction.
+     - Enforced Pro user exclusion (`!isPro`).
+     - Enforced 20% consumption threshold: if `session.accessVia === 'free_pass'`, crossing `plannedMs * 0.2` (360,000 ms) in `heartbeat`, `finalize`, or `commitSession` triggers `consumePassForSession`. Quitting before 20% preserves the pass as `'available'`.
+     - Automated background expiration via `expireStalePasses(nowMs)`.
+  4. **Dedicated Verification Suite:** Implemented `__tests__/data/free_pass_rules.test.ts` testing all 6 mandatory guarantees, and verified forward migration upgrade in `__tests__/data/db_migrations.test.ts`.
+- **Rationale:**
+  - Guarantees 100% adherence to Ember Master Plan v1.1.
+  - Preserves user history, offline guarantees, and transactional integrity.
+- **Architectural Impact:**
+  - Test suite grew from 12 test suites / 96 tests to 13 test suites / 103 tests, all passing across IST and EST in < 0.7s.
   - Zero TypeScript errors (`npx tsc --noEmit`), zero ESLint warnings (`eslint --max-warnings 0`), 100% Prettier formatting compliance.

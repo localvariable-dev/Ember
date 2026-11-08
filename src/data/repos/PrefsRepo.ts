@@ -4,12 +4,13 @@
  * SQLite persistence for the single-row user_preferences table.
  */
 
+import type { AmbientBedId } from '../../domain/constants';
 import type { Db } from '../db';
 import type { Mode, UserPreferences } from '../types';
 
 interface RawPrefsRow {
   id: 1;
-  ambient_bed_id: string | null;
+  ambient_bed_id: AmbientBedId | null;
   selected_voice_id: string;
   voice_volume: number;
   ambient_volume: number;

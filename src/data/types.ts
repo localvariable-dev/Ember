@@ -4,7 +4,7 @@
  * TypeScript models representing persistent SQLite entities.
  */
 
-import type { ProtocolId } from '../domain/constants';
+import type { AmbientBedId, ProtocolId } from '../domain/constants';
 
 export type Mode = 'focus' | 'sleep';
 export type Tier = 'free' | 'pro';
@@ -33,7 +33,7 @@ export interface AudioProtocol {
   id: ProtocolId;
   title: string;
   subtitle: string;
-  minutes: number;
+  minutes: 5 | 10 | 30;
   plannedMs: number;
   tier: Tier;
   supportsModes: boolean;
@@ -69,7 +69,7 @@ export interface ProtocolVoiceTrack {
 }
 
 export interface AmbientBed {
-  id: string;
+  id: AmbientBedId;
   title: string;
   tier: Tier;
   assetKey: string;
@@ -83,7 +83,7 @@ export interface SessionLog {
   protocolId: ProtocolId;
   voiceId: string;
   mode: Mode;
-  ambientBedId: string | null;
+  ambientBedId: AmbientBedId | null;
   sighPacer: boolean;
   accessVia: AccessVia;
   startedAtMs: number;
@@ -125,11 +125,13 @@ export type EntitlementKind = 'subscription' | 'lifetime' | 'free_pass';
 export type EntitlementSource = 'mock' | 'google_play' | 'razorpay' | 'app';
 export type EntitlementStatus = 'active' | 'expired' | 'revoked' | 'available' | 'consumed';
 
+export type ProductId = 'ember_pro_monthly' | 'ember_pro_lifetime';
+
 export interface UserEntitlement {
   id: string;
   kind: EntitlementKind;
   source: EntitlementSource;
-  productId: string | null;
+  productId: ProductId | string | null;
   status: EntitlementStatus;
   grantedAtMs: number;
   expiresAtMs: number | null;
@@ -143,7 +145,7 @@ export interface UserEntitlement {
 
 export interface UserPreferences {
   id: 1;
-  ambientBedId: string | null;
+  ambientBedId: AmbientBedId | null;
   selectedVoiceId: string;
   voiceVolume: number;
   ambientVolume: number;
@@ -171,7 +173,7 @@ export interface CreateSessionParams {
   protocolId: ProtocolId;
   voiceId?: string;
   mode: Mode;
-  ambientBedId?: string | null;
+  ambientBedId?: AmbientBedId | null;
   sighPacer?: boolean;
   accessVia?: AccessVia;
   startedAtMs: number;
