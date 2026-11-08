@@ -3,7 +3,7 @@
  * Master Plan Part 1 §2.2 & Part 6 §7.2
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { AppState, Platform, StyleSheet, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -33,25 +33,32 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 });
 
 function AppLifecycle() {
-  const { sessionRepo, prefsRepo, streakRepo, updatePreferences, preferences } = useDatabase();
+  const { sessionRepo, prefsRepo, streakRepo, updatePreferences } = useDatabase();
   const setProtocol = useSessionStore((state) => state.setProtocol);
+  const initializedRef = useRef(false);
 
   useEffect(() => {
-    // 1. Setup gentle notification channel on Android
-    setupNotificationChannel().catch(() => {});
+    // 1. One-time app launch initialization
+    if (!initializedRef.current) {
+      initializedRef.current = true;
 
-    // 2. Track app open timestamp & reset lapsed sent count
-    const now = Date.now();
-    updatePreferences({
-      lastOpenAtMs: now,
-      firstLaunchAtMs: preferences.firstLaunchAtMs ?? now,
-      lapsedSentCount: 0,
-    });
+      // Setup gentle notification channel on Android
+      setupNotificationChannel().catch(() => {});
 
-    // 3. Sync notification schedule on app launch
-    syncNotificationSchedule({ sessionRepo, prefsRepo, streakRepo }, now).catch(() => {});
+      // Track app open timestamp & reset lapsed sent count
+      const now = Date.now();
+      const currentPrefs = prefsRepo.get();
+      updatePreferences({
+        lastOpenAtMs: now,
+        firstLaunchAtMs: currentPrefs.firstLaunchAtMs ?? now,
+        lapsedSentCount: 0,
+      });
 
-    // 4. Handle notification response taps (deep links)
+      // Sync notification schedule on app launch
+      syncNotificationSchedule({ sessionRepo, prefsRepo, streakRepo }, now).catch(() => {});
+    }
+
+    // 2. Handle notification response taps (deep links)
     let notifSub: { remove: () => void } | null = null;
     if (Platform.OS === 'android' || Platform.OS === 'ios') {
       try {
@@ -72,7 +79,7 @@ function AppLifecycle() {
       }
     }
 
-    // 5. AppState listener for foregrounding
+    // 3. AppState listener for foregrounding
     const appStateSub = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
         const activeNow = Date.now();
@@ -82,17 +89,14 @@ function AppLifecycle() {
     });
 
     return () => {
-      notifSub?.remove();
-      appStateSub.remove();
+      if (typeof notifSub?.remove === 'function') {
+        notifSub.remove();
+      }
+      if (typeof appStateSub?.remove === 'function') {
+        appStateSub.remove();
+      }
     };
-  }, [
-    sessionRepo,
-    prefsRepo,
-    streakRepo,
-    updatePreferences,
-    preferences.firstLaunchAtMs,
-    setProtocol,
-  ]);
+  }, [sessionRepo, prefsRepo, streakRepo, updatePreferences, setProtocol]);
 
   return null;
 }

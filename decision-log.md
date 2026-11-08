@@ -25,6 +25,11 @@ This document tracks all significant product, architectural, technical, and engi
 - [ADR-015: Sanctuary Experience, Responsive Layout, and Root SheetHost Integration](#adr-015-sanctuary-experience-responsive-layout-and-root-sheethost-integration)
 - [ADR-016: Audio Asset Pipeline, Main.wav Mastering, Offline Asset Management & Asset Registry](#adr-016-audio-asset-pipeline-mainwav-mastering-offline-asset-management--asset-registry)
 - [ADR-017: Audio Pipeline Contract Reconciliation, 40 MB Enforced Budget & Machine Manifest Generation](#adr-017-audio-pipeline-contract-reconciliation-40-mb-enforced-budget--machine-manifest-generation)
+- [ADR-018: Dual-Track Audio Engine, Live Narrator Switching & State Machine Synchronization](#adr-018-dual-track-audio-engine-live-narrator-switching--state-machine-synchronization)
+- [ADR-019: Platform-Separated Database Initializers & Test Isolation Architecture](#adr-019-platform-separated-database-initializers--test-isolation-architecture)
+- [ADR-020: Standard SVG Container Rotation & Elimination of Kebab-Case DOM Properties](#adr-020-standard-svg-container-rotation--elimination-of-kebab-case-dom-properties)
+- [ADR-021: Journey, Retention Architecture & Gentle Local Notification Scheduling](#adr-021-journey-retention-architecture--gentle-local-notification-scheduling)
+- [ADR-022: React 19 State Lifecycle Stabilization, Hook Memoization & Update Depth Guarding](#adr-022-react-19-state-lifecycle-stabilization-hook-memoization--update-depth-guarding)
 
 ---
 
@@ -591,3 +596,45 @@ This document tracks all significant product, architectural, technical, and engi
   - Zero TypeScript errors (`npx tsc --noEmit`), zero ESLint warnings, 100% Prettier formatting compliance.
   - Audio asset budget strictly preserved at 23.78 MB $\le 40$ MB.
   - `Voices/Main.wav` SHA-256 untouched (`4a1f411ba472cb0f66687ea6e1f6dbef666370f884bd31677586fa0d6a868991`).
+
+---
+
+### ADR-022: React 19 State Lifecycle Stabilization, Hook Memoization & Update Depth Guarding
+
+- **Date:** 2026-11-09
+- **Status:** Accepted
+- **Context:**
+  During web preview and initial app mounting, React 19 raised a fatal runtime error:
+  ```text
+  Maximum update depth exceeded. This can happen when a component repeatedly calls setState inside componentWillUpdate or componentDidUpdate.
+  The error points to:
+  src/providers/DatabaseProvider.tsx:88
+  setPreferences(updated);
+  app/_layout.tsx:122
+  <AppLifecycle />
+  ```
+  Root Cause Analysis:
+  1. **Unstable Callback References:** In `DatabaseProvider.tsx`, `updatePreferences` was an inline arrow function recreated on every render cycle. Additionally, the context `value` object was an unmemoized object literal recreated on each render.
+  2. **Cyclic Effect Triggers in `AppLifecycle`:** `AppLifecycle` contained `updatePreferences` and `preferences.firstLaunchAtMs` in its `useEffect` dependency array. When `AppLifecycle` mounted, it called `updatePreferences({ lastOpenAtMs: now, firstLaunchAtMs: preferences.firstLaunchAtMs ?? now, ... })`. This called `setPreferences`, triggering a `DatabaseProvider` re-render, which created a fresh reference of `updatePreferences` and changed `preferences.firstLaunchAtMs`. As a result, the `useEffect` in `AppLifecycle` fired again, creating an infinite state update loop.
+  3. **Lack of No-Op Write Guarding:** `PrefsRepo.patch` and `DatabaseProvider.updatePreferences` executed SQL updates and React state dispatches even when every modified field was identical to the current stored values.
+- **Decision:**
+  1. **`PrefsRepo.patch` Idempotence:** Guard `PrefsRepo.patch` with a shallow-equality check comparing proposed updates against current database values (`changes[key] !== undefined && changes[key] !== current[key]`). If no values change, return `current` without running an SQL `UPDATE` statement or modifying `updatedAtMs`.
+  2. **Stable Database Context Callbacks & Value Memoization:**
+     - Memoize `updatePreferences` using `useCallback([repos.prefsRepo])`.
+     - Inside `updatePreferences`, compare proposed changes against `repos.prefsRepo.get()`. If unchanged, return `current` immediately without dispatching `setPreferences`.
+     - Strictly obey React 19 rules of hooks (`react-hooks/refs`) by eliminating ref mutations during render.
+     - Memoize `refreshState` using `useCallback([repos])`.
+     - Memoize context `value` using `useMemo([db, repos, preferences, streak, isPro, activePass, updatePreferences, refreshState])`.
+  3. **Stabilize `AppLifecycle` Initialization:**
+     - Employ an `initializedRef = useRef(false)` guard inside `AppLifecycle` so one-time initialization (`setupNotificationChannel`, `lastOpenAtMs`, `firstLaunchAtMs`, `syncNotificationSchedule`) runs strictly once on mount.
+     - Read `firstLaunchAtMs` directly from `repos.prefsRepo.get()`, removing `preferences.firstLaunchAtMs` from effect dependencies.
+     - Guard subscription cleanup (`typeof notifSub?.remove === 'function'`).
+  4. **Automated Regression Suite:**
+     - Create `__tests__/providers/database_provider_lifecycle.test.tsx` verifying `PrefsRepo` idempotence, `DatabaseProvider` callback reference stability across renders, one-time mount execution of `AppLifecycle`, and absence of infinite render loops.
+- **Rationale:**
+  - Guarantees deterministic, loop-free React 19 rendering while preserving complete product functionality and offline-first database synchronization.
+  - Eliminates redundant SQLite write transactions and unneeded disk I/O.
+- **Architectural Impact:**
+  - Infinite update loop completely eliminated; web export, preview, and mobile app mount cleanly.
+  - All 24 test suites and 198 tests pass across timezones.
+  - Zero TypeScript errors (`npx tsc --noEmit`), zero ESLint warnings, 100% Prettier formatting compliance.

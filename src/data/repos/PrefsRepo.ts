@@ -98,6 +98,19 @@ export class PrefsRepo {
 
   patch(changes: Partial<UserPreferences>, nowMs = Date.now()): UserPreferences {
     const current = this.get();
+    let hasChanges = false;
+    for (const key of Object.keys(changes) as (keyof UserPreferences)[]) {
+      if (key === 'updatedAtMs' || key === 'id') continue;
+      if (changes[key] !== undefined && changes[key] !== current[key]) {
+        hasChanges = true;
+        break;
+      }
+    }
+
+    if (!hasChanges) {
+      return current;
+    }
+
     const updated: UserPreferences = {
       ...current,
       ...changes,

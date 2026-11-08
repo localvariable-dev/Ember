@@ -4,7 +4,7 @@
  * Provides SQLite repositories and reactive preference/streak states to all UI components.
  */
 
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import type { Db } from '../data/db';
 import { openAppDatabase } from '../data/db';
 import { migrate } from '../data/migrations';
@@ -76,29 +76,54 @@ export function DatabaseProvider({ children, testDb }: { children: React.ReactNo
     repos.entitlementRepo.getActivePass(),
   );
 
-  const refreshState = () => {
-    setPreferences(repos.prefsRepo.get());
-    setStreak(repos.streakRepo.get());
-    setIsPro(repos.entitlementRepo.hasActivePro());
-    setActivePass(repos.entitlementRepo.getActivePass());
-  };
+  const refreshState = useCallback(() => {
+    const nextPrefs = repos.prefsRepo.get();
+    const nextStreak = repos.streakRepo.get();
+    const nextPro = repos.entitlementRepo.hasActivePro();
+    const nextPass = repos.entitlementRepo.getActivePass();
 
-  const updatePreferences = (changes: Partial<UserPreferences>): UserPreferences => {
-    const updated = repos.prefsRepo.patch(changes);
-    setPreferences(updated);
-    return updated;
-  };
+    setPreferences(nextPrefs);
+    setStreak(nextStreak);
+    setIsPro(nextPro);
+    setActivePass(nextPass);
+  }, [repos]);
 
-  const value: DatabaseContextValue = {
-    db,
-    ...repos,
-    preferences,
-    streak,
-    isPro,
-    activePass,
-    updatePreferences,
-    refreshState,
-  };
+  const updatePreferences = useCallback(
+    (changes: Partial<UserPreferences>): UserPreferences => {
+      const current = repos.prefsRepo.get();
+      let hasChanges = false;
+      for (const key of Object.keys(changes) as (keyof UserPreferences)[]) {
+        if (key === 'updatedAtMs' || key === 'id') continue;
+        if (changes[key] !== undefined && changes[key] !== current[key]) {
+          hasChanges = true;
+          break;
+        }
+      }
+
+      if (!hasChanges) {
+        return current;
+      }
+
+      const updated = repos.prefsRepo.patch(changes);
+      setPreferences(updated);
+      return updated;
+    },
+    [repos.prefsRepo],
+  );
+
+  const value = useMemo<DatabaseContextValue>(
+    () => ({
+      db,
+      ...repos,
+      preferences,
+      streak,
+      isPro,
+      activePass,
+      updatePreferences,
+      refreshState,
+    }),
+    [db, repos, preferences, streak, isPro, activePass, updatePreferences, refreshState],
+  );
 
   return <DatabaseContext.Provider value={value}>{children}</DatabaseContext.Provider>;
 }
