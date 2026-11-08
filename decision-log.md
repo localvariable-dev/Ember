@@ -17,6 +17,7 @@ This document tracks all significant product, architectural, technical, and engi
 - [ADR-007: `Main.wav` Preservation and Offline Delivery Target Specification](#adr-007-mainwav-preservation-and-offline-delivery-target-specification)
 - [ADR-008: Decoupled Mock Billing Adapter Architecture](#adr-008-decoupled-mock-billing-adapter-architecture)
 - [ADR-009: Strict Offline-First Local Storage via Synchronous SQLite](#adr-009-strict-offline-first-local-storage-via-synchronous-sqlite)
+- [ADR-010: SDK 58 Dependency Closure, Peer Direct Linking & Toolchain Alignment](#adr-010-sdk-58-dependency-closure-peer-direct-linking--toolchain-alignment)
 
 ---
 
@@ -149,3 +150,24 @@ This document tracks all significant product, architectural, technical, and engi
 - **Architectural Impact:**
   - Ephemeral UI state lives in Zustand (`useSheetStore`, `useSessionStore`).
   - All durable business data lives in SQLite (`ember.db`), accessed through clean repository classes (`SessionRepo`, `StreakRepo`, `EntitlementRepo`, `PrefsRepo`).
+
+---
+
+### ADR-010: SDK 58 Dependency Closure, Peer Direct Linking & Toolchain Alignment
+
+- **Date:** 2026-11-08
+- **Status:** Accepted
+- **Context:** `npx expo-doctor` and `npx expo install --check` flagged missing direct peer dependencies (`expo-asset` required by `expo-audio`, `expo-constants` and `expo-linking` required by `expo-router`), version mismatches on dev tools (`typescript`, `jest`, `@types/jest`), and a patch divergence on `react` (19.3.1 vs 19.3.0). Furthermore, the actual Android SDK configuration needed verification against Expo SDK 58 defaults.
+- **Decision:**
+  1. Add `expo-asset`, `expo-constants`, and `expo-linking` as direct root dependencies so they are linked into standalone native Android builds.
+  2. Pin `react-native-svg` to `15.16.0` to match the exact Expo SDK 58 specification.
+  3. Upgrade `typescript` to `~6.0.3`, `jest` to `~30.5.2`, and `@types/jest` to `^30.0.0` (with `"types": ["jest"]` in `tsconfig.json`) to satisfy Expo SDK 58 tooling requirements.
+  4. Explicitly declare `"expo": { "install": { "exclude": ["react"] } }` in `package.json` to safely permit React 19.3.1 (required by `react-dom@19.3.1` in Expo Router).
+  5. Verify Android build configuration: Expo SDK 58 `ExpoRootProjectPlugin` sets `compileSdkVersion=37`, `targetSdkVersion=36`, `minSdkVersion=24`, `buildToolsVersion=37.0.0`, `AGP=9.2.1`, `Gradle=9.4.1`, `Kotlin=2.2.10`, and `jvmToolchain(17)`.
+- **Rationale:**
+  1. Standalone Android builds crash at runtime outside Expo Go if transitive native peers are not declared as root dependencies.
+  2. Aligning to Expo SDK 58's expected dev toolchain ensures 100% compliance across all 20 automated checks in `expo-doctor` (`20/20 checks passed`).
+- **Architectural Impact:**
+  - `npx expo-doctor` passes all 20 checks with zero failures.
+  - `npx expo install --check` reports `Dependencies are up to date`.
+  - Android prebuild generates `com.emberrest.app` targeting Android 15 (API 36) with compile SDK 37 and minSdk 24 (Android 7.0+).
