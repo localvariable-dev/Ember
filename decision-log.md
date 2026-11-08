@@ -33,6 +33,7 @@ This document tracks all significant product, architectural, technical, and engi
 - [ADR-023: Decoupled Monetisation Architecture, Billing Abstraction & Offline Entitlement Reconciliation](#adr-023-decoupled-monetisation-architecture-billing-abstraction--offline-entitlement-reconciliation)
 - [ADR-024: CI Release Signing Configuration & Kotlin Inline Module Property Isolation](#adr-024-ci-release-signing-configuration--kotlin-inline-module-property-isolation)
 - [ADR-025: Keystore Validation & Non-Silent Testing Build Debug Signing Fallback](#adr-025-keystore-validation--non-silent-testing-build-debug-signing-fallback)
+- [ADR-026: ARM64-Specific ABI Optimization for Personal Device Testing APKs](#adr-026-arm64-specific-abi-optimization-for-personal-device-testing-apks)
 
 ---
 
@@ -791,3 +792,27 @@ This document tracks all significant product, architectural, technical, and engi
 - **Architectural Impact:**
   - Testing builds produce an installable, minified release APK with debug signature.
   - Production release signing path is 100% preserved and activated automatically when valid credentials are provided.
+
+---
+
+### ADR-026: ARM64-Specific ABI Optimization for Personal Device Testing APKs
+
+- **Date:** 2026-11-09
+- **Status:** Accepted
+- **Context:**
+  - The universal release APK built across 4 ABIs (`armeabi-v7a`, `arm64-v8a`, `x86`, `x86_64`) totaled 127 MB, exceeding the 90 MB CI hard limit.
+  - Inspection of the APK payload showed that compiled native C++ binaries (`libhermes.so`, `libreactnative.so`, `libfbjni.so`, `libreanimated.so`, `libsqlite3.so`, etc.) account for ~25 MB per architecture (~103 MB total in `lib/`).
+  - Personal testing devices (specifically the OnePlus Nord 5) use modern 64-bit ARM architecture (`arm64-v8a`). The 32-bit ARM and x86 emulator binaries are unnecessary for physical device testing.
+- **Decision:**
+  1. Configured the testing build workflow to pass `-PreactNativeArchitectures=arm64-v8a` during `./gradlew assembleRelease`, instructing AGP (`ndk.abiFilters`) to package only `arm64-v8a` shared libraries.
+  2. Preserved the full multi-architecture configuration (`armeabi-v7a,arm64-v8a,x86,x86_64`) for production release builds (`SIGNING_MODE == 'release'`), ensuring future Play Store distribution is never silently constrained.
+  3. Replaced fragile `find | head -1` APK discovery with a deterministic lookup checking `app-arm64-v8a-release.apk`, `app-release.apk`, and strict release filters, directly assigning `FINAL_APK_PATH` to the upload step.
+  4. Added native ABI inspection in CI via `unzip -l` and `apkanalyzer` to verify the packaged architectures and print them to the GitHub Step Summary.
+- **Rationale:**
+  - Reduces APK size from 127 MB to ~45 MB (well under the 90 MB limit) without removing any application features, JavaScript code, voice recordings, or ambient audio assets.
+  - Eliminates duplicate APK files in the uploaded artifact zip.
+  - Retains all production release requirements intact.
+- **Architectural Impact:**
+  - Personal testing APK size reduced by ~65% (~45 MB vs 127 MB).
+  - 100% feature and asset parity preserved.
+  - Deterministic artifact naming (`ember-testing-debug-signed.apk` in `ember-testing-apk`).

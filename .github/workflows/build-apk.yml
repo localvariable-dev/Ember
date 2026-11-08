@@ -117,6 +117,8 @@ jobs:
           if [ "$PROD_SIGNING_VALID" = "true" ]; then
             echo "SIGNING_MODE=release" >> "$GITHUB_ENV"
             echo "ARTIFACT_NAME=ember-release-apk" >> "$GITHUB_ENV"
+            # Production releases retain all architectures for Play Store distribution
+            echo "TARGET_ARCH=armeabi-v7a,arm64-v8a,x86,x86_64" >> "$GITHUB_ENV"
             echo "::notice::Production release keystore verified successfully. Configuring release signing."
             printf '\nEMBER_RELEASE_STORE_FILE=release.keystore\nEMBER_RELEASE_STORE_PASSWORD=%s\nEMBER_RELEASE_KEY_ALIAS=%s\nEMBER_RELEASE_KEY_PASSWORD=%s\n' \
               "$KEYSTORE_PASSWORD" \
@@ -131,20 +133,50 @@ jobs:
             fi
             echo "SIGNING_MODE=testing-debug-signed" >> "$GITHUB_ENV"
             echo "ARTIFACT_NAME=ember-testing-apk" >> "$GITHUB_ENV"
-            echo "::warning::Production signing credentials are absent or invalid (keystore failed verification). Falling back to debug signing for this testing build. NOT FOR GOOGLE PLAY RELEASE."
+            # Testing build targeted for 64-bit ARM device (e.g. OnePlus Nord 5) to optimize APK size
+            echo "TARGET_ARCH=arm64-v8a" >> "$GITHUB_ENV"
+            echo "::warning::Production signing credentials are absent or invalid (keystore failed verification). Falling back to debug signing for this testing build. Target ABI: arm64-v8a."
           fi
 
       - name: Build APK
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon --build-cache -Dorg.gradle.jvmargs="-Xmx4g"
-
-      - name: Verify APK size and identify build
         run: |
-          APK_PATH=$(find android/app/build/outputs/apk/release -name '*.apk' | head -1)
-          if [ -z "$APK_PATH" ]; then
-            echo "::error::No APK found in release output directory"
+          ./gradlew assembleRelease \
+            --no-daemon \
+            --build-cache \
+            -Dorg.gradle.jvmargs="-Xmx4g" \
+            -PreactNativeArchitectures="${{ env.TARGET_ARCH || 'arm64-v8a' }}"
+
+      - name: Verify APK size, ABI, and identify build
+        run: |
+          APK_DIR="android/app/build/outputs/apk/release"
+          # Deterministic APK discovery
+          if [ -f "$APK_DIR/app-arm64-v8a-release.apk" ]; then
+            APK_PATH="$APK_DIR/app-arm64-v8a-release.apk"
+          elif [ -f "$APK_DIR/app-release.apk" ]; then
+            APK_PATH="$APK_DIR/app-release.apk"
+          else
+            APK_PATH=$(find "$APK_DIR" -maxdepth 1 -type f -name "*release*.apk" ! -name "*unaligned*" | sort | head -1)
+          fi
+
+          if [ -z "$APK_PATH" ] || [ ! -f "$APK_PATH" ]; then
+            echo "::error::Release APK not found in $APK_DIR"
             exit 1
           fi
+
+          echo "Discovered APK: $APK_PATH"
+
+          # Verify native architectures inside the APK using unzip and apkanalyzer
+          echo "=== Native Library Inspection ==="
+          INCLUDED_ABIS=$(unzip -l "$APK_PATH" | grep -o 'lib/[^/]*' | sort -u | sed 's/lib\///' || true)
+          echo "Included native ABIs: $INCLUDED_ABIS"
+
+          if command -v apkanalyzer >/dev/null 2>&1; then
+            apkanalyzer apk summary "$APK_PATH" || true
+          elif [ -n "$ANDROID_HOME" ] && [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" ]; then
+            "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" apk summary "$APK_PATH" || true
+          fi
+
           SIZE_MB=$(du -m "$APK_PATH" | cut -f1)
           echo "APK size: ${SIZE_MB} MB ($APK_PATH)"
           if [ "$SIZE_MB" -gt 90 ]; then
@@ -154,19 +186,25 @@ jobs:
 
           MODE="${SIGNING_MODE:-testing-debug-signed}"
           if [ "$MODE" = "testing-debug-signed" ]; then
-            mv "$APK_PATH" android/app/build/outputs/apk/release/ember-testing-debug-signed.apk
+            FINAL_APK="$APK_DIR/ember-testing-debug-signed.apk"
+            mv "$APK_PATH" "$FINAL_APK"
+          else
+            FINAL_APK="$APK_PATH"
           fi
+          echo "FINAL_APK_PATH=$FINAL_APK" >> "$GITHUB_ENV"
 
           echo "### Android Build Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Signing Mode:** \`${MODE}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **APK Size:** \`${SIZE_MB} MB\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Artifact Name:** \`${ARTIFACT_NAME:-ember-testing-apk}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Target Architecture:** \`${TARGET_ARCH:-arm64-v8a}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Included ABIs:** \`${INCLUDED_ABIS}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **APK Size:** \`${SIZE_MB} MB\` (hard limit: 90 MB)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Artifact File:** \`$(basename "$FINAL_APK")\`" >> "$GITHUB_STEP_SUMMARY"
           if [ "$MODE" = "testing-debug-signed" ]; then
             echo "> [!NOTE]" >> "$GITHUB_STEP_SUMMARY"
-            echo "> This APK is signed with the Android debug certificate for personal device testing. It is **NOT** signed for Google Play Store release." >> "$GITHUB_STEP_SUMMARY"
+            echo "> This APK is signed with the Android debug certificate and optimized for ARM64 devices (OnePlus Nord 5). It is **NOT** signed for Google Play Store release." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "> [!TIP]" >> "$GITHUB_STEP_SUMMARY"
-            echo "> This APK is signed with the production release keystore and is ready for Play Store release distribution." >> "$GITHUB_STEP_SUMMARY"
+            echo "> This APK is signed with the production release keystore with full multi-architecture support." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Verify no placeholder audio in release
@@ -181,6 +219,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT_NAME || 'ember-testing-apk' }}
-          path: android/app/build/outputs/apk/release/*.apk
+          path: ${{ env.FINAL_APK_PATH || 'android/app/build/outputs/apk/release/*.apk' }}
           retention-days: 30
           if-no-files-found: error
