@@ -4,7 +4,8 @@
  */
 
 import { MockAudioDriver } from '../../src/audio/MockAudioDriver';
-import { openTestDatabase, type Db } from '../../src/data/db';
+import type { Db } from '../../src/data/db';
+import { openTestDatabase } from '../helpers/testDb';
 import { MIGRATIONS } from '../../src/data/migrations';
 import { EntitlementRepo } from '../../src/data/repos/EntitlementRepo';
 import { PrefsRepo } from '../../src/data/repos/PrefsRepo';

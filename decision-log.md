@@ -477,3 +477,44 @@ This document tracks all significant product, architectural, technical, and engi
   - Expanded test suite to **21 test suites** and **172 tests** passing across all timezones in < 1.3s.
   - Zero TypeScript errors (`npx tsc --noEmit`), zero ESLint warnings (`eslint --max-warnings 0`), 100% Prettier formatting compliance.
   - Verified `Voices/Main.wav` SHA-256 completely untouched (`4a1f411ba472cb0f66687ea6e1f6dbef666370f884bd31677586fa0d6a868991`).
+
+---
+
+### ADR-019: Strict Boundary Separation for Test vs Production Database & Web Preview Adapter
+
+- **Date:** 2026-11-08
+- **Status:** Accepted
+- **Context:**
+  The Expo web preview crashed with:
+  ```text
+  node_modules/better-sqlite3/lib/methods/backup.js
+  src/data/db.ts:113 — openTestDatabase
+  src/providers/DatabaseProvider.tsx:34 — getAppDb
+  src/providers/DatabaseProvider.tsx:66 — DatabaseProvider
+  app/_layout.tsx:48 — RootLayout
+  ```
+  Root Cause Investigation:
+  1. `src/providers/DatabaseProvider.tsx` contained an improper fallback `catch` block that dynamically invoked `openTestDatabase(':memory:')` when native database opening failed.
+  2. `src/data/db.ts` defined both the production `openAppDatabase()` and test `openTestDatabase()`, causing `better-sqlite3` (a C++ Node.js native addon) to be included in the production application import graph.
+  3. `expo-sqlite` on web relies on `wa-sqlite.wasm`, Web Workers, and `SharedArrayBuffer` with `Atomics.wait()`, which fails under standard Metro bundling without cross-origin isolation headers.
+- **Decision:**
+  1. **Strict Dependency Boundary Enforcement:**
+     - Created `src/data/dbTypes.ts` defining abstract `Db` and `RunResult` interfaces.
+     - Extracted `BetterSqliteDb` and `openTestDatabase()` completely out of `src/data/db.ts` into `__tests__/helpers/testDb.ts`.
+     - `better-sqlite3` is now strictly imported ONLY by Node.js test helpers under `__tests__/helpers/` and is 100% unresolvable from the production application graph.
+     - Removed all try/catch fallback logic in `src/providers/DatabaseProvider.tsx`. `DatabaseProvider` exclusively calls `openAppDatabase('ember.db')` in production.
+  2. **Dedicated Web Preview Database Adapter (`src/data/db.web.ts`):**
+     - Provided a clean, isolated in-memory `WebPreviewDb` adapter via Metro platform extension (`.web.ts`).
+     - On web, Metro resolves `src/data/db` to `src/data/db.web.ts`. `expo-sqlite` and `better-sqlite3` are never bundled into web builds.
+     - Simulates synchronous schema queries (`PRAGMA user_version: 2`) so migrations complete instantly.
+     - Seeds canonical protocols, voices, and ambient beds in memory, enabling full rendering and navigation of Sanctuary UI and bottom sheets without faking persistent storage.
+  3. **Android Native Production Integrity Preserved:**
+     - Android builds resolve `src/data/db.ts`, continuing to use real `expo-sqlite` with WAL mode and foreign keys enabled.
+- **Rationale:**
+  - Prevents bundler leakage and runtime crashes during web development and previews.
+  - Maintains strict architectural boundaries: production code cannot reach test-only native binaries.
+  - Keeps tests fast, deterministic, and isolated using in-memory `better-sqlite3`.
+- **Architectural Impact:**
+  - Web export (`npx expo export --platform web`) succeeds with 0 errors (1,489 modules bundled cleanly).
+  - All 21 test suites and 172 tests continue passing in < 1.4s across all timezones.
+  - Zero TypeScript errors (`npx tsc --noEmit`), zero ESLint warnings, 100% Prettier formatting compliance.

@@ -6,7 +6,7 @@
 import { CANONICAL_CARDS } from '../../src/features/sanctuary/SessionCardList';
 import { useSheetStore } from '../../src/stores/useSheetStore';
 import { useSessionStore } from '../../src/stores/useSessionStore';
-import { openTestDatabase } from '../../src/data/db';
+import { openTestDatabase } from '../helpers/testDb';
 import { migrate } from '../../src/data/migrations';
 import { PrefsRepo, VoiceRepo, EntitlementRepo } from '../../src/data/repos';
 import { PROTOCOL_IDS, AMBIENT_BED_IDS } from '../../src/domain/constants';

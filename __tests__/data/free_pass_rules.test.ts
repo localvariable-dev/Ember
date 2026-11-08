@@ -12,7 +12,7 @@
  */
 
 import { FREE_PASS_VALID_DAYS } from '../../src/domain/constants';
-import { openTestDatabase } from '../../src/data/db';
+import { openTestDatabase } from '../helpers/testDb';
 import { migrate } from '../../src/data/migrations';
 import { EntitlementRepo, SessionRepo } from '../../src/data/repos';
 

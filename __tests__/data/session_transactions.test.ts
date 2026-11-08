@@ -5,7 +5,7 @@
  * replay protection/idempotency, and transaction rollback on failure.
  */
 
-import { openTestDatabase } from '../../src/data/db';
+import { openTestDatabase } from '../helpers/testDb';
 import { migrate } from '../../src/data/migrations';
 import { EntitlementRepo, LedgerRepo, SessionRepo, StreakRepo } from '../../src/data/repos';
 

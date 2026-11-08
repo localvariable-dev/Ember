@@ -5,7 +5,7 @@
  * repeated migration safety, rollback on failure, and foreign key enforcement.
  */
 
-import { openTestDatabase } from '../../src/data/db';
+import { openTestDatabase } from '../helpers/testDb';
 import { migrate, MIGRATIONS } from '../../src/data/migrations';
 
 describe('Database & Migrations', () => {

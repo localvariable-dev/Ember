@@ -4,7 +4,7 @@
  * Tests CRUD operations, edge cases, and constraints across all domain repositories.
  */
 
-import { openTestDatabase } from '../../src/data/db';
+import { openTestDatabase } from '../helpers/testDb';
 import { migrate } from '../../src/data/migrations';
 import {
   EntitlementRepo,

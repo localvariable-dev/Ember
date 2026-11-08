@@ -24,15 +24,7 @@ let globalDb: Db | null = null;
 
 export function getAppDb(): Db {
   if (!globalDb) {
-    let dbInstance: Db;
-    try {
-      dbInstance = openAppDatabase('ember.db');
-    } catch {
-      // In non-native test environments, fall back to in-memory test database
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { openTestDatabase } = require('../data/db');
-      dbInstance = openTestDatabase(':memory:');
-    }
+    const dbInstance = openAppDatabase('ember.db');
     migrate(dbInstance);
     globalDb = dbInstance;
   }
@@ -114,27 +106,7 @@ export function DatabaseProvider({ children, testDb }: { children: React.ReactNo
 export function useDatabase(): DatabaseContextValue {
   const ctx = useContext(DatabaseContext);
   if (!ctx) {
-    // If used outside provider (e.g. standalone test), create default instance
-    const db = getAppDb();
-    const prefsRepo = new PrefsRepo(db);
-    const streakRepo = new StreakRepo(db);
-    const entitlementRepo = new EntitlementRepo(db);
-    return {
-      db,
-      sessionRepo: new SessionRepo(db),
-      streakRepo,
-      ledgerRepo: new LedgerRepo(db),
-      entitlementRepo,
-      prefsRepo,
-      protocolRepo: new ProtocolRepo(db),
-      voiceRepo: new VoiceRepo(db),
-      preferences: prefsRepo.get(),
-      streak: streakRepo.get(),
-      isPro: entitlementRepo.hasActivePro(),
-      activePass: entitlementRepo.getActivePass(),
-      updatePreferences: (changes) => prefsRepo.patch(changes),
-      refreshState: () => {},
-    };
+    throw new Error('useDatabase must be used within a DatabaseProvider');
   }
   return ctx;
 }
