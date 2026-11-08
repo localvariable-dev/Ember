@@ -6,12 +6,18 @@
  */
 
 import { CALM_DELTA_MIN_SAMPLES, STATE, type PerceivedState, type ProtocolId } from './constants';
+import { addDays, dayKeyFromMs, type DayKey } from './dayKey';
 
 export interface PairedSession {
   protocolId: ProtocolId;
   preState: PerceivedState;
   postState: PerceivedState;
   startedAtMs?: number;
+}
+
+export interface DetailedPairedSession extends PairedSession {
+  voiceId?: string;
+  mode?: 'focus' | 'sleep';
 }
 
 export interface HeadlineInsight {
@@ -210,4 +216,120 @@ export function computeBestTimeOfDayBand(
   }
 
   return best;
+}
+
+/**
+ * Slice delta insight for Pro analytics (by protocol, voice, or mode).
+ * Master Plan Part 2 §3.8
+ */
+export interface SliceDeltaInsight {
+  sliceKey: 'protocolId' | 'voiceId' | 'mode';
+  sliceValue: string;
+  meanDelta: number;
+  sampleCount: number;
+}
+
+/**
+ * Computes mean delta grouped by a single dimension (protocolId, voiceId, or mode).
+ */
+export function computeMeanDeltaBySlice(
+  sessions: readonly DetailedPairedSession[],
+  sliceKey: 'protocolId' | 'voiceId' | 'mode',
+): SliceDeltaInsight[] {
+  const buckets = new Map<string, number[]>();
+
+  for (const s of sessions) {
+    if (s.preState == null || s.postState == null) continue;
+    const val = s[sliceKey];
+    if (!val) continue;
+
+    let arr = buckets.get(val);
+    if (!arr) {
+      arr = [];
+      buckets.set(val, arr);
+    }
+    arr.push(s.postState - s.preState);
+  }
+
+  const results: SliceDeltaInsight[] = [];
+  for (const [val, deltas] of buckets.entries()) {
+    const mean = deltas.reduce((a, b) => a + b, 0) / deltas.length;
+    results.push({
+      sliceKey,
+      sliceValue: val,
+      meanDelta: Math.round(mean * 100) / 100,
+      sampleCount: deltas.length,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Weekly mean delta for last 8 ISO weeks (starting Monday).
+ * Master Plan Part 2 §3.8
+ */
+export interface WeeklyMeanDelta {
+  weekStartDayKey: DayKey; // Monday 'YYYY-MM-DD'
+  meanDelta: number | null;
+  sampleCount: number;
+}
+
+/**
+ * Computes weekly mean delta over the last 8 ISO weeks preceding and including referenceNowMs.
+ * Weeks are guaranteed to start on Monday and never split across calendar years.
+ */
+export function computeWeeklyMeanDelta(
+  sessions: readonly (PairedSession & { startedAtMs: number })[],
+  referenceNowMs: number,
+): WeeklyMeanDelta[] {
+  // Determine Monday of current week for referenceNowMs
+  const refDate = new Date(referenceNowMs);
+  const refDayKey = dayKeyFromMs(referenceNowMs);
+  const dayOfWeek = refDate.getDay(); // 0 = Sunday, 1 = Monday, ...
+  const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const currentMonday = addDays(refDayKey, -diffToMonday);
+
+  // Build array of 8 consecutive Monday DayKeys in chronological order (W-7 to W-0)
+  const mondays: DayKey[] = [];
+  for (let i = 7; i >= 0; i--) {
+    mondays.push(addDays(currentMonday, -i * 7));
+  }
+
+  // Bucket sessions into these weeks
+  const buckets = new Map<DayKey, number[]>();
+  for (const m of mondays) {
+    buckets.set(m, []);
+  }
+
+  for (const s of sessions) {
+    if (s.preState == null || s.postState == null || !s.startedAtMs) continue;
+    const sDate = new Date(s.startedAtMs);
+    const sDayKey = dayKeyFromMs(s.startedAtMs);
+    const sDayOfWeek = sDate.getDay();
+    const sDiff = sDayOfWeek === 0 ? 6 : sDayOfWeek - 1;
+    const sMonday = addDays(sDayKey, -sDiff);
+
+    const arr = buckets.get(sMonday);
+    if (arr) {
+      arr.push(s.postState - s.preState);
+    }
+  }
+
+  return mondays.map((weekMonday) => {
+    const deltas = buckets.get(weekMonday) ?? [];
+    if (deltas.length === 0) {
+      return {
+        weekStartDayKey: weekMonday,
+        meanDelta: null,
+        sampleCount: 0,
+      };
+    }
+    const mean = deltas.reduce((a, b) => a + b, 0) / deltas.length;
+    return {
+      weekStartDayKey: weekMonday,
+      meanDelta: Math.round(mean * 100) / 100,
+      sampleCount: deltas.length,
+    };
+  });
 }

@@ -10,12 +10,15 @@ import {
   PARTIAL_MIN_LISTENED_MS,
   PLANNED_MS,
   SLEEP_FADE_MS,
+  SLEEP_RECONCILE_MIN_PROGRESS,
+  PRE_CHECKIN_WINDOW_MS,
   FREE_PASS_CONSUME_AT,
   type ProtocolId,
   type PerceivedState,
 } from './constants';
 
-export type SessionStage = 'IDLE' | 'PREROLL' | 'ACTIVE' | 'ENDING' | 'CHECKIN' | 'DONE';
+export type SessionStage =
+  'IDLE' | 'PREROLL' | 'ACTIVE' | 'ENDING' | 'CHECKIN' | 'DONE' | 'DONE_SILENT' | 'ABORTED';
 
 export type RestMode = 'focus' | 'sleep';
 
@@ -84,6 +87,7 @@ export type SessionEffect =
   | { type: 'CONSUME_PASS' }
   | { type: 'PERSIST_HEARTBEAT'; positionMs: number }
   | { type: 'SWITCH_VOICE'; targetVoiceId: string; positionMs: number }
+  | { type: 'RECORD_PRE_CHECKIN'; preState: PerceivedState }
   | { type: 'RECORD_CHECKIN'; postState: PerceivedState }
   | { type: 'FINALIZE_SESSION'; status: FinalStatus; listenedMs: number }
   | { type: 'NAVIGATE'; destination: 'sanctuary' | 'summary' };
@@ -106,13 +110,15 @@ export type SessionEvent =
   | { type: 'PAUSE' }
   | { type: 'INTERRUPT' }
   | { type: 'POSITION_UPDATE'; positionMs: number; timestampMs: number }
+  | { type: 'PRE_CHECKIN_SELECT'; state: PerceivedState }
   | { type: 'SWITCH_VOICE'; voiceId: string }
   | { type: 'VOICE_SWITCH_FAILED'; error?: string }
   | { type: 'VOICE_ENDED' }
   | { type: 'CHIME_DONE' }
   | { type: 'CHECKIN_SELECT'; state: PerceivedState }
   | { type: 'CHECKIN_SKIP' }
-  | { type: 'END_CONFIRMED' };
+  | { type: 'END_CONFIRMED' }
+  | { type: 'DISMISS' };
 
 export interface TransitionResult {
   state: SessionState;
@@ -242,6 +248,19 @@ export function reduceSession(s: SessionState, e: SessionEvent): TransitionResul
       return { state: next, effects };
     }
 
+    case 'PRE_CHECKIN_SELECT': {
+      // Non-blocking pre-session check-in during preroll or first 20 seconds of active playback
+      const canPreCheckin =
+        s.stage === 'PREROLL' || (s.stage === 'ACTIVE' && s.positionMs <= PRE_CHECKIN_WINDOW_MS);
+      if (!canPreCheckin) return { state: s, effects };
+
+      effects.push({ type: 'RECORD_PRE_CHECKIN', preState: e.state });
+      return {
+        state: { ...s, preState: e.state },
+        effects,
+      };
+    }
+
     case 'SWITCH_VOICE': {
       if (s.stage !== 'ACTIVE' || s.voiceId === e.voiceId) {
         return { state: s, effects };
@@ -276,8 +295,8 @@ export function reduceSession(s: SessionState, e: SessionEvent): TransitionResul
         effects.push({ type: 'PLAY_CHIME' });
         effects.push({ type: 'HAPTIC_END' });
       } else {
-        // Sleep mode: silent exit directly to DONE
-        next.stage = 'DONE';
+        // Sleep mode: silent exit directly to DONE_SILENT (Master Plan Part 2 §3.4)
+        next.stage = 'DONE_SILENT';
         effects.push({ type: 'STOP_AUDIO' });
       }
 
@@ -309,8 +328,13 @@ export function reduceSession(s: SessionState, e: SessionEvent): TransitionResul
     }
 
     case 'END_CONFIRMED': {
-      if (s.stage === 'DONE' || s.stage === 'IDLE') {
+      if (s.stage === 'DONE' || s.stage === 'DONE_SILENT' || s.stage === 'IDLE') {
         return { state: s, effects };
+      }
+
+      if (s.stage === 'ABORTED') {
+        // ABORTED -> DONE transition
+        return { state: { ...s, stage: 'DONE' }, effects };
       }
 
       effects.push({ type: 'STOP_AUDIO' });
@@ -320,7 +344,7 @@ export function reduceSession(s: SessionState, e: SessionEvent): TransitionResul
         return { state: { ...s, stage: 'DONE', isPlaying: false }, effects };
       }
 
-      // Uncommitted early exit
+      // Uncommitted early exit: transitions ACTIVE -> ABORTED
       const status: FinalStatus = s.listenedMs >= PARTIAL_MIN_LISTENED_MS ? 'partial' : 'abandoned';
       effects.push({
         type: 'FINALIZE_SESSION',
@@ -330,12 +354,78 @@ export function reduceSession(s: SessionState, e: SessionEvent): TransitionResul
       effects.push({ type: 'NAVIGATE', destination: 'sanctuary' });
 
       return {
-        state: { ...s, stage: 'DONE', isPlaying: false },
+        state: { ...s, stage: 'ABORTED', isPlaying: false },
         effects,
       };
+    }
+
+    case 'DISMISS': {
+      if (s.stage === 'DONE_SILENT' || s.stage === 'ABORTED' || s.stage === 'DONE') {
+        return { state: { ...s, stage: 'DONE' }, effects };
+      }
+      return { state: s, effects };
     }
 
     default:
       return { state: s, effects };
   }
+}
+
+/**
+ * Launch Reconcile Candidate Input
+ * Master Plan Part 2 §3.4
+ */
+export interface ReconcileCandidate {
+  mode: RestMode;
+  plannedMs: number;
+  startedAtMs: number;
+  maxPositionMs: number;
+  lastHeartbeatMs: number;
+}
+
+export interface ReconcileDecision {
+  shouldCommit: boolean;
+  status: FinalStatus;
+  commitReason: CommitReason | null;
+  listenedMs: number;
+}
+
+/**
+ * Evaluates launch reconciliation for in-progress sessions found on app launch.
+ * Rule (Part 2 §3.4):
+ * For every in-progress session:
+ * if mode='sleep' AND max_position_ms >= 0.50 * planned_ms AND (now - started_at_ms) >= 0.85 * planned_ms:
+ *   -> commit with 'sleep_reconcile' (listened_ms = min(planned_ms, lastHeartbeat - startedAt))
+ * else:
+ *   -> finalize as 'partial' (if maxPositionMs >= 120,000) or 'abandoned'
+ */
+export function reconcileSleepSession(
+  candidate: ReconcileCandidate,
+  nowMs: number,
+): ReconcileDecision {
+  const isSleep = candidate.mode === 'sleep';
+  const has50PctProgress =
+    candidate.maxPositionMs >= candidate.plannedMs * SLEEP_RECONCILE_MIN_PROGRESS;
+  const hasElapsed85Pct =
+    nowMs - candidate.startedAtMs >= candidate.plannedMs * COMMIT_THRESHOLD.sleep;
+
+  if (isSleep && has50PctProgress && hasElapsed85Pct) {
+    const elapsed = Math.max(0, candidate.lastHeartbeatMs - candidate.startedAtMs);
+    const listenedMs = Math.min(candidate.plannedMs, elapsed);
+    return {
+      shouldCommit: true,
+      status: 'completed',
+      commitReason: 'sleep_reconcile',
+      listenedMs,
+    };
+  }
+
+  const status: FinalStatus =
+    candidate.maxPositionMs >= PARTIAL_MIN_LISTENED_MS ? 'partial' : 'abandoned';
+  return {
+    shouldCommit: false,
+    status,
+    commitReason: null,
+    listenedMs: candidate.maxPositionMs,
+  };
 }

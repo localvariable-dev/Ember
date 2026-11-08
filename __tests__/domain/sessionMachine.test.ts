@@ -6,6 +6,7 @@
 import {
   INITIAL_SESSION_STATE,
   reduceSession,
+  reconcileSleepSession,
   type SessionState,
 } from '../../src/domain/sessionMachine';
 
@@ -214,8 +215,8 @@ describe('sessionMachine: lifecycle and commits', () => {
     expect(res2.effects).toContainEqual({ type: 'CONSUME_PASS' });
   });
 
-  it('handles early exit: abandoned if listened < 120s, partial if >= 120s', () => {
-    // Under 120s -> abandoned
+  it('handles early exit: transitions ACTIVE -> ABORTED -> DONE, abandoned if listened < 120s, partial if >= 120s', () => {
+    // Under 120s -> abandoned, transitions to ABORTED then DONE
     let s1: SessionState = reduceSession(INITIAL_SESSION_STATE, {
       type: 'BEGIN',
       protocolId: 'rapid_reset_5',
@@ -233,14 +234,17 @@ describe('sessionMachine: lifecycle and commits', () => {
     }).state;
 
     const exit1 = reduceSession(s1, { type: 'END_CONFIRMED' });
-    expect(exit1.state.stage).toBe('DONE');
+    expect(exit1.state.stage).toBe('ABORTED');
     expect(exit1.effects).toContainEqual({
       type: 'FINALIZE_SESSION',
       status: 'abandoned',
       listenedMs: 60_000,
     });
 
-    // 120s or more -> partial
+    const finalizeExit1 = reduceSession(exit1.state, { type: 'DISMISS' });
+    expect(finalizeExit1.state.stage).toBe('DONE');
+
+    // 120s or more -> partial, transitions to ABORTED then DONE
     let s2: SessionState = reduceSession(INITIAL_SESSION_STATE, {
       type: 'BEGIN',
       protocolId: 'rapid_reset_5',
@@ -258,11 +262,153 @@ describe('sessionMachine: lifecycle and commits', () => {
     }).state;
 
     const exit2 = reduceSession(s2, { type: 'END_CONFIRMED' });
-    expect(exit2.state.stage).toBe('DONE');
+    expect(exit2.state.stage).toBe('ABORTED');
     expect(exit2.effects).toContainEqual({
       type: 'FINALIZE_SESSION',
       status: 'partial',
       listenedMs: 130_000,
+    });
+
+    const finalizeExit2 = reduceSession(exit2.state, { type: 'DISMISS' });
+    expect(finalizeExit2.state.stage).toBe('DONE');
+  });
+
+  it('exits silently into DONE_SILENT on VOICE_ENDED in Sleep mode', () => {
+    let s: SessionState = reduceSession(INITIAL_SESSION_STATE, {
+      type: 'BEGIN',
+      protocolId: 'rapid_reset_5',
+      mode: 'sleep',
+      voiceId: 'maya',
+      ambientBedId: 'rain',
+      sigh: false,
+      startedAtMs: 1000,
+    }).state;
+
+    const endRes = reduceSession(s, { type: 'VOICE_ENDED' });
+    expect(endRes.state.stage).toBe('DONE_SILENT');
+    expect(endRes.state.committed).toBe(true);
+    expect(endRes.state.commitReason).toBe('natural_end');
+    expect(endRes.effects).toContainEqual({ type: 'STOP_AUDIO' });
+    // Sleep mode must not emit chimes or haptics
+    expect(endRes.effects.some((e) => e.type === 'PLAY_CHIME')).toBe(false);
+    expect(endRes.effects.some((e) => e.type === 'HAPTIC_END')).toBe(false);
+
+    // Can dismiss from DONE_SILENT to DONE
+    const dismissRes = reduceSession(endRes.state, { type: 'DISMISS' });
+    expect(dismissRes.state.stage).toBe('DONE');
+  });
+
+  it('allows non-blocking pre-session check-in during the first 20 seconds of playback', () => {
+    let s: SessionState = reduceSession(INITIAL_SESSION_STATE, {
+      type: 'BEGIN',
+      protocolId: 'rapid_reset_5',
+      mode: 'focus',
+      voiceId: 'maya',
+      ambientBedId: 'off',
+      sigh: false,
+      startedAtMs: 1000,
+    }).state;
+
+    // Advance to 15s (within 20s window)
+    s = reduceSession(s, {
+      type: 'POSITION_UPDATE',
+      positionMs: 15_000,
+      timestampMs: 16_000,
+    }).state;
+
+    const preCheckinRes = reduceSession(s, {
+      type: 'PRE_CHECKIN_SELECT',
+      state: 1, // Wired
+    });
+
+    expect(preCheckinRes.state.preState).toBe(1);
+    expect(preCheckinRes.state.isPlaying).toBe(true); // Audio uninterrupted
+    expect(preCheckinRes.effects).toContainEqual({
+      type: 'RECORD_PRE_CHECKIN',
+      preState: 1,
+    });
+    expect(
+      preCheckinRes.effects.some((e) => e.type === 'PAUSE_AUDIO' || e.type === 'STOP_AUDIO'),
+    ).toBe(false);
+
+    // Advance past 20s (e.g. 25s)
+    let sPast = reduceSession(preCheckinRes.state, {
+      type: 'POSITION_UPDATE',
+      positionMs: 25_000,
+      timestampMs: 26_000,
+    }).state;
+
+    // Attempting pre-session check-in past 20s window is ignored
+    const lateRes = reduceSession(sPast, {
+      type: 'PRE_CHECKIN_SELECT',
+      state: 2, // Drained
+    });
+    expect(lateRes.state.preState).toBe(1); // unchanged
+    expect(lateRes.effects.some((e) => e.type === 'RECORD_PRE_CHECKIN')).toBe(false);
+  });
+
+  describe('reconcileSleepSession launch recovery rules', () => {
+    it('commits with sleep_reconcile if sleep mode, maxPosition >= 50% and elapsed >= 85%', () => {
+      const plannedMs = 1_800_000; // 30 min
+      const startedAtMs = 1_000_000;
+      const decision = reconcileSleepSession(
+        {
+          mode: 'sleep',
+          plannedMs,
+          startedAtMs,
+          maxPositionMs: 1_000_000, // 55.5% (>= 50%)
+          lastHeartbeatMs: startedAtMs + 1_600_000,
+        },
+        startedAtMs + 1_600_000, // 1600s >= 85% of 1800s (1530s)
+      );
+
+      expect(decision.shouldCommit).toBe(true);
+      expect(decision.status).toBe('completed');
+      expect(decision.commitReason).toBe('sleep_reconcile');
+      expect(decision.listenedMs).toBe(1_600_000);
+    });
+
+    it('finalizes as partial without committing if elapsed < 85% or progress < 50%', () => {
+      const plannedMs = 1_800_000;
+      const startedAtMs = 1_000_000;
+
+      // Progress only 40% (< 50%)
+      const decision = reconcileSleepSession(
+        {
+          mode: 'sleep',
+          plannedMs,
+          startedAtMs,
+          maxPositionMs: 700_000,
+          lastHeartbeatMs: startedAtMs + 1_600_000,
+        },
+        startedAtMs + 1_600_000,
+      );
+
+      expect(decision.shouldCommit).toBe(false);
+      expect(decision.status).toBe('partial');
+      expect(decision.commitReason).toBeNull();
+      expect(decision.listenedMs).toBe(700_000);
+    });
+
+    it('finalizes as abandoned if progress is below 120s', () => {
+      const plannedMs = 1_800_000;
+      const startedAtMs = 1_000_000;
+
+      const decision = reconcileSleepSession(
+        {
+          mode: 'sleep',
+          plannedMs,
+          startedAtMs,
+          maxPositionMs: 60_000,
+          lastHeartbeatMs: startedAtMs + 65_000,
+        },
+        startedAtMs + 1_600_000,
+      );
+
+      expect(decision.shouldCommit).toBe(false);
+      expect(decision.status).toBe('abandoned');
+      expect(decision.commitReason).toBeNull();
+      expect(decision.listenedMs).toBe(60_000);
     });
   });
 });

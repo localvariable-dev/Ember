@@ -19,6 +19,7 @@ This document tracks all significant product, architectural, technical, and engi
 - [ADR-009: Strict Offline-First Local Storage via Synchronous SQLite](#adr-009-strict-offline-first-local-storage-via-synchronous-sqlite)
 - [ADR-010: SDK 58 Dependency Closure, Peer Direct Linking & Toolchain Alignment](#adr-010-sdk-58-dependency-closure-peer-direct-linking--toolchain-alignment)
 - [ADR-011: Pure Domain Segregation, Root SheetHost & Ephemeral State Architecture](#adr-011-pure-domain-segregation-root-sheethost--ephemeral-state-architecture)
+- [ADR-012: Phase 1 Domain Gap Closure, WCAG Automated Contrast & Jest Optimization](#adr-012-phase-1-domain-gap-closure-wcag-automated-contrast--jest-optimization)
 
 ---
 
@@ -194,3 +195,29 @@ This document tracks all significant product, architectural, technical, and engi
 - **Architectural Impact:**
   - 100% of domain rules verified with 53 unit tests passing in both `Asia/Kolkata` (IST) and `America/New_York` (EST).
   - Clean separation of concerns: UI views read Zustand stores, domain logic executes pure reducers, and database repositories handle persistence.
+
+---
+
+### ADR-012: Phase 1 Domain Gap Closure, WCAG Automated Contrast & Jest Optimization
+
+- **Date:** 2026-11-08
+- **Status:** Accepted
+- **Context:** During the Phase 1 acceptance audit (Prompt 1.1), four domain and verification gaps were identified:
+  1. `src/domain/dayKey.ts` lacked explicit unit tests verifying that sessions spanning midnight (e.g. 23:50 to 00:15) attribute streak credit strictly to the session START date.
+  2. `src/domain/sessionMachine.ts` required explicit `DONE_SILENT` (for Sleep mode natural exit), `ABORTED` (for uncommitted exit before reaching `DONE`), a non-blocking `PRE_CHECKIN_SELECT` event for check-ins within the first 20 seconds of playback, and a pure `reconcileSleepSession` helper for app startup recovery.
+  3. `src/domain/calmDelta.ts` was missing Pro insight domain aggregators: `computeMeanDeltaBySlice` (by protocol, voice, or mode) and `computeWeeklyMeanDelta` (8 consecutive ISO weeks starting on Monday).
+  4. WCAG 2.1 token contrast ratios required automated mathematical unit tests in CI.
+  5. Jest execution without Watchman suffered from slow recursive filesystem searches traversing the entire `node_modules` and `android` directories.
+- **Decision:**
+  1. Add explicit test vectors in `__tests__/domain/dayKey.test.ts` for midnight crossover session attribution and DST calendar boundaries.
+  2. Expand `SessionStage` to include `'DONE_SILENT'` and `'ABORTED'`, implement `PRE_CHECKIN_SELECT` with a 20-second active window (`PRE_CHECKIN_WINDOW_MS = 20_000`) without pausing or interrupting audio, and implement `reconcileSleepSession` adhering to Part 2 §3.4.
+  3. Implement `computeMeanDeltaBySlice` and `computeWeeklyMeanDelta` in `src/domain/calmDelta.ts`, covered by comprehensive unit tests.
+  4. Implement `__tests__/design/contrast.test.ts` computing WCAG 2.1 relative luminance and contrast ratios, proving all token pairs exceed specifications (`text`/`bg` >= 15:1 [actual ~19.1:1], `textMuted`/`bg` >= 6:1 [actual ~6.48:1], `textMuted`/`surface` >= 5.5:1 [actual ~6.07:1], `onAccent`/`accent` >= 9:1 [actual ~9.8:1]).
+  5. Configure `roots: ['<rootDir>/src', '<rootDir>/__tests__']` in `jest.config.js` to bound Jest's haste map search to source and test files, dropping test execution time from minutes to under 1 second.
+  6. Document that local host `assembleDebug`/`assembleRelease` is explicitly **BLOCKED** due to absence of local Android SDK (`ANDROID_HOME`), with compilation offloaded to GitHub Actions CI (`.github/workflows/build-apk.yml`).
+- **Rationale:**
+  - Guarantees complete domain specification fidelity against Master Plan v1.1 Parts 1, 2, and 6 before beginning Phase 2 (SQLite database and repositories).
+  - Keeps all domain and analytics logic 100% pure, deterministic, and instant to test.
+- **Architectural Impact:**
+  - Test suite expanded from 7 suites / 53 tests to 8 suites / 69 tests, all passing across both `Asia/Kolkata` (IST) and `America/New_York` (EST) in under 0.5s.
+  - Zero TypeScript errors (`npx tsc --noEmit`), zero ESLint warnings (`eslint --max-warnings 0`), 100% Prettier formatting compliance.

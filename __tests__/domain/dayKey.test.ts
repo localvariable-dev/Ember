@@ -33,4 +33,38 @@ describe('dayKey', () => {
   it('adds negative days correctly', () => {
     expect(addDays('2026-03-01', -1)).toBe('2026-02-28');
   });
+
+  it('attributes session spanning midnight to its START date, not completion date', () => {
+    // Session starts at 23:50 on June 15 and runs for 25 minutes into June 16 00:15
+    const startedAt = new Date(2026, 5, 15, 23, 50, 0);
+    const completedAt = new Date(2026, 5, 16, 0, 15, 0);
+
+    const startDayKey = dayKeyFromMs(startedAt.getTime());
+    const completeDayKey = dayKeyFromMs(completedAt.getTime());
+
+    expect(startDayKey).toBe('2026-06-15');
+    expect(completeDayKey).toBe('2026-06-16');
+
+    // Ember streak rule (Part 2 §3.3 R1): credit_day must be derived from session.startedAtMs
+    const sessionCreditDay = dayKeyFromMs(startedAt.getTime());
+    expect(sessionCreditDay).toBe('2026-06-15');
+  });
+
+  it('extracts local calendar components rather than UTC date', () => {
+    // Construct local midnight + 10 minutes
+    const localMidnightTen = new Date(2026, 5, 15, 0, 10, 0);
+    const expectedLocal = `2026-06-15`;
+    expect(dayKeyFromMs(localMidnightTen.getTime())).toBe(expectedLocal);
+  });
+
+  it('calculates calendar days correctly across DST transitions using pure UTC day arithmetic', () => {
+    // US Daylight Saving Time 2026:
+    // Spring forward on 2026-03-08 (23-hour day)
+    // Fall back on 2026-11-01 (25-hour day)
+    expect(daysBetween('2026-03-07', '2026-03-09')).toBe(2);
+    expect(addDays('2026-03-07', 2)).toBe('2026-03-09');
+
+    expect(daysBetween('2026-10-31', '2026-11-02')).toBe(2);
+    expect(addDays('2026-10-31', 2)).toBe('2026-11-02');
+  });
 });

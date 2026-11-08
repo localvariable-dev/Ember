@@ -36,6 +36,7 @@ export const FREE_PASS_MAX_LIFETIME = 1;
 export const SLEEP_FADE_MS = 90_000;
 export const SLEEP_RECONCILE_MIN_PROGRESS = 0.5; // heartbeat must have shown >= 50% progress
 export const MORNING_CHECKIN_WINDOW_MS = 10 * 3_600_000;
+export const PRE_CHECKIN_WINDOW_MS = 20_000; // non-blocking pre-session check-in window during playback
 
 // Insights
 export const CALM_DELTA_MIN_SAMPLES = 5;

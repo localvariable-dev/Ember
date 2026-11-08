@@ -6,6 +6,9 @@
 import {
   computeBestTimeOfDayBand,
   computeHeadlineInsight,
+  computeMeanDeltaBySlice,
+  computeWeeklyMeanDelta,
+  type DetailedPairedSession,
   type PairedSession,
 } from '../../src/domain/calmDelta';
 import { STATE } from '../../src/domain/constants';
@@ -100,5 +103,111 @@ describe('calmDelta: computeBestTimeOfDayBand', () => {
     expect(best).not.toBeNull();
     expect(best?.band).toBe('15–18');
     expect(best?.meanDelta).toBe(3);
+  });
+});
+
+describe('calmDelta: computeMeanDeltaBySlice', () => {
+  const sessions: DetailedPairedSession[] = [
+    {
+      protocolId: 'rapid_reset_5',
+      voiceId: 'maya',
+      mode: 'focus',
+      preState: STATE.WIRED,
+      postState: STATE.CALM, // +3
+    },
+    {
+      protocolId: 'rapid_reset_5',
+      voiceId: 'arjun',
+      mode: 'focus',
+      preState: STATE.DRAINED,
+      postState: STATE.CALM, // +2
+    },
+    {
+      protocolId: 'afternoon_recharge_10',
+      voiceId: 'maya',
+      mode: 'sleep',
+      preState: STATE.DRAINED,
+      postState: STATE.RESTORED, // +3
+    },
+  ];
+
+  it('computes mean delta grouped by protocolId', () => {
+    const slices = computeMeanDeltaBySlice(sessions, 'protocolId');
+    const rapid = slices.find((s) => s.sliceValue === 'rapid_reset_5');
+    const recharge = slices.find((s) => s.sliceValue === 'afternoon_recharge_10');
+
+    expect(rapid).toBeDefined();
+    expect(rapid?.sampleCount).toBe(2);
+    expect(rapid?.meanDelta).toBe(2.5); // (3 + 2) / 2
+
+    expect(recharge).toBeDefined();
+    expect(recharge?.sampleCount).toBe(1);
+    expect(recharge?.meanDelta).toBe(3);
+  });
+
+  it('computes mean delta grouped by voiceId', () => {
+    const slices = computeMeanDeltaBySlice(sessions, 'voiceId');
+    const maya = slices.find((s) => s.sliceValue === 'maya');
+    const arjun = slices.find((s) => s.sliceValue === 'arjun');
+
+    expect(maya?.sampleCount).toBe(2);
+    expect(maya?.meanDelta).toBe(3); // (3 + 3) / 2
+
+    expect(arjun?.sampleCount).toBe(1);
+    expect(arjun?.meanDelta).toBe(2);
+  });
+
+  it('computes mean delta grouped by mode', () => {
+    const slices = computeMeanDeltaBySlice(sessions, 'mode');
+    const focus = slices.find((s) => s.sliceValue === 'focus');
+    const sleep = slices.find((s) => s.sliceValue === 'sleep');
+
+    expect(focus?.sampleCount).toBe(2);
+    expect(focus?.meanDelta).toBe(2.5);
+
+    expect(sleep?.sampleCount).toBe(1);
+    expect(sleep?.meanDelta).toBe(3);
+  });
+});
+
+describe('calmDelta: computeWeeklyMeanDelta', () => {
+  it('generates 8 consecutive ISO weeks starting on Monday', () => {
+    // Reference date: Wednesday 2026-06-17
+    const refDate = new Date(2026, 5, 17, 14, 0, 0);
+
+    // Two sessions: one this week (2026-06-16, delta +3), one 2 weeks ago (2026-06-02, delta +2)
+    const sessions = [
+      {
+        protocolId: 'rapid_reset_5' as const,
+        preState: STATE.WIRED,
+        postState: STATE.CALM, // +3
+        startedAtMs: new Date(2026, 5, 16, 10, 0, 0).getTime(),
+      },
+      {
+        protocolId: 'afternoon_recharge_10' as const,
+        preState: STATE.DRAINED,
+        postState: STATE.CALM, // +2
+        startedAtMs: new Date(2026, 5, 2, 15, 0, 0).getTime(),
+      },
+    ];
+
+    const weeks = computeWeeklyMeanDelta(sessions, refDate.getTime());
+
+    expect(weeks.length).toBe(8);
+
+    // The most recent week (index 7) starts on Monday 2026-06-15
+    expect(weeks[7]?.weekStartDayKey).toBe('2026-06-15');
+    expect(weeks[7]?.sampleCount).toBe(1);
+    expect(weeks[7]?.meanDelta).toBe(3);
+
+    // Index 5 (two weeks ago) starts on Monday 2026-06-01
+    expect(weeks[5]?.weekStartDayKey).toBe('2026-06-01');
+    expect(weeks[5]?.sampleCount).toBe(1);
+    expect(weeks[5]?.meanDelta).toBe(2);
+
+    // Empty week (index 6, starting 2026-06-08)
+    expect(weeks[6]?.weekStartDayKey).toBe('2026-06-08');
+    expect(weeks[6]?.sampleCount).toBe(0);
+    expect(weeks[6]?.meanDelta).toBeNull();
   });
 });
