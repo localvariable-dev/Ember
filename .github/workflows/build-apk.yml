@@ -1,0 +1,127 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '20'
+  JAVA_VERSION: '17'
+  EXPO_PUBLIC_BILLING_MODE: 'mock'
+
+jobs:
+  lint-and-test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate placeholders (so asset verification succeeds in CI)
+        run: npm run placeholders
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format
+
+      - name: Verify audio assets
+        run: npm run verify:assets
+
+      - name: Run tests (IST timezone)
+        run: TZ=Asia/Kolkata npx jest --forceExit --ci
+
+      - name: Run tests (EST timezone)
+        run: TZ=America/New_York npx jest --forceExit --ci
+
+  build-apk:
+    name: Build Android APK
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate placeholders
+        run: npm run placeholders
+
+      - name: Generate native project (Expo Prebuild)
+        run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Decode keystore (release builds only)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.keystore
+
+      - name: Configure signing (release builds only)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          cat >> android/gradle.properties <<EOF
+          EMBER_RELEASE_STORE_FILE=release.keystore
+          EMBER_RELEASE_STORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          EMBER_RELEASE_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}
+          EMBER_RELEASE_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
+
+      - name: Build APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx4g"
+
+      - name: Verify APK size
+        run: |
+          APK_PATH=$(find android/app/build/outputs/apk/release -name '*.apk' | head -1)
+          SIZE_MB=$(du -m "$APK_PATH" | cut -f1)
+          echo "APK size: ${SIZE_MB} MB"
+          if [ "$SIZE_MB" -gt 90 ]; then
+            echo "::error::APK size ${SIZE_MB} MB exceeds 90 MB hard limit"
+            exit 1
+          fi
+
+      - name: Verify no placeholder audio in release
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          if grep -q '"placeholder": true' src/audio/protocols.generated.json 2>/dev/null; then
+            echo "::error::Release build contains placeholder audio assets"
+            exit 1
+          fi
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ember-release-apk
+          path: android/app/build/outputs/apk/release/*.apk
+          retention-days: 30
+          if-no-files-found: error

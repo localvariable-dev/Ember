@@ -1,0 +1,14 @@
+node_modules
+.expo
+android
+ios
+dist
+web-build
+coverage
+*.generated.*
+*.wav
+*.ogg
+*.opus
+*.flac
+Voices
+Docs
