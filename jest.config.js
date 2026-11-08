@@ -1,5 +1,6 @@
 module.exports = {
   preset: 'jest-expo',
+  maxWorkers: 1,
   roots: ['<rootDir>/src', '<rootDir>/__tests__', '<rootDir>/tools'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'mjs', 'node'],
   transform: {

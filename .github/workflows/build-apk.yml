@@ -50,10 +50,10 @@ jobs:
         run: npm run verify:assets
 
       - name: Run tests (IST timezone)
-        run: TZ=Asia/Kolkata npx jest --forceExit --ci
+        run: TZ=Asia/Kolkata npx jest --runInBand --forceExit --ci
 
       - name: Run tests (EST timezone)
-        run: TZ=America/New_York npx jest --forceExit --ci
+        run: TZ=America/New_York npx jest --runInBand --forceExit --ci
 
   build-apk:
     name: Build Android APK

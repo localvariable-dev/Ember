@@ -52,6 +52,7 @@ describe('SessionController', () => {
   afterEach(() => {
     controller.cleanupSession();
     jest.useRealTimers();
+    db.close?.();
   });
 
   it('creates SQLite session log and starts playback', async () => {
