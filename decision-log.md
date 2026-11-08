@@ -22,6 +22,7 @@ This document tracks all significant product, architectural, technical, and engi
 - [ADR-012: Phase 1 Domain Gap Closure, WCAG Automated Contrast & Jest Optimization](#adr-012-phase-1-domain-gap-closure-wcag-automated-contrast--jest-optimization)
 - [ADR-013: SQLite Persistence Architecture, Repositories & Idempotent Session Transactions](#adr-013-sqlite-persistence-architecture-repositories--idempotent-session-transactions)
 - [ADR-014: Schema Reconciliation, Catalogue Alignment & Free Pass Entitlement Integrity](#adr-014-schema-reconciliation-catalogue-alignment--free-pass-entitlement-integrity)
+- [ADR-015: Sanctuary Experience, Responsive Layout, and Root SheetHost Integration](#adr-015-sanctuary-experience-responsive-layout-and-root-sheethost-integration)
 
 ---
 
@@ -291,3 +292,45 @@ This document tracks all significant product, architectural, technical, and engi
 - **Architectural Impact:**
   - Test suite grew from 12 test suites / 96 tests to 13 test suites / 103 tests, all passing across IST and EST in < 0.7s.
   - Zero TypeScript errors (`npx tsc --noEmit`), zero ESLint warnings (`eslint --max-warnings 0`), 100% Prettier formatting compliance.
+
+---
+
+## Phase 3: Sanctuary Experience & Navigation
+
+### ADR-015: Sanctuary Experience, Responsive Layout, and Root SheetHost Integration
+
+- **Date:** 2026-11-08
+- **Status:** Accepted
+- **Context:** Following the persistence architecture and schema reconciliation in Phase 2, Phase 3 requires the complete implementation of the **Sanctuary Experience** and root navigation sheets specified in Ember Master Plan Part 1 §2.3–§2.7:
+  1. The core screen must deliver a friction-free, 2-tap entry into rest.
+  2. Complete component hierarchy required: `TopBar`, `StreakPill`, `GreetingBlock`, `SessionCardList`, `SessionCard`, `ModeToggle`, `AmbientChips`, `VoiceAndPacerRow`, and sticky 72 dp `BeginRestButton`.
+  3. Strictly the 3 canonical protocols (`rapid_reset_5`, `afternoon_recharge_10`, `deep_rest_30`) with Free, Pro (`🔒 PRO`), Free Pass (`Free pass · Nd left`), and Selected states.
+  4. Root-hosted modal sheets: `JourneySheet` (92% height), `PaywallSheet` (84% height), `VoicePickerSheet`, and `AmbientPickerSheet` hosted via `SheetHost.tsx` with a guarantee that strictly only one sheet is open at any time.
+  5. SQLite-backed user preferences (`selectedVoiceId`, `ambientBedId`, `lastMode`, `sighPacerDefault`, `firstRunCueShown`, `thetaHintShown`) synchronized with React context (`DatabaseProvider`).
+  6. Ergonomic and responsive design supporting compact Android viewports (360×640 dp) without overlapping sticky controls or truncating touch targets.
+- **Decision:**
+  1. **Component Architecture & Hierarchy:**
+     - `StreakPill`: 32 dp pill showing dynamic ember ring dot based on `projectStreak` (`done_today` = soft gold, `open` = amber, `held_by_grace` = amber ring, `lapsed` = dim text) and opening `JourneySheet`.
+     - `GreetingBlock`: Renders circadian headline (`Fraunces 34/40`) and context line per selected card.
+     - `SessionCardList`: Renders the 3 canonical cards with 12 dp gap, 88 dp minimum height, 1.5 dp amber border, `surfaceRaised` fill, and halo glow (`#F59E0B` opacity 0.22) when selected.
+     - `ModeToggle`: Two-segment pill (`☼ Focus` · `☾ Sleep`) with haptic toggle feedback; displayed for 10-min and 30-min protocols.
+     - `AmbientChips`: Single-select chips (`[Off] [Rain] [Brown] [6Hz θ] [+]`) with dynamic selected premium bed injection, and a 3-second auto-fading "Best with headphones" cue on first selection of 6 Hz Theta.
+     - `VoiceAndPacerRow`: 48 dp row housing `VoiceChip` (opens `VoicePickerSheet`), separator `·`, and `Sigh Pacer` switch (with caption "Includes two sighs" for 5m card).
+     - `BeginRestButton`: 72 dp tall sticky bottom CTA with lock glyph for locked states (`"🔒 Unlock Deep Rest"` vs `"Begin Rest"`), and a 6-second first-run whisper cue ("Tap Begin Rest.").
+  2. **Root Sheet Architecture (`SheetHost`):**
+     - Mounted at the root of `app/_layout.tsx` above all navigation stacks.
+     - Exclusivity guaranteed by Zustand `useSheetStore` where `activeSheet` is a single discriminated union (`'none' | 'journey' | 'paywall' | 'voice_picker' | 'ambient_picker' | 'dev'`).
+     - Backed by scrim backdrop dismiss, system back-button (`onRequestClose`), and clean entry/exit haptics.
+  3. **Reactive SQLite Context (`DatabaseProvider`):**
+     - Wraps the entire application, instantiating singletons for all 7 repositories.
+     - Exposes synchronous SQLite preference mutation (`updatePreferences`) that updates both database and React state, eliminating state drift.
+  4. **Responsive Layout & Safe Insets:**
+     - Accommodates compact Android screens by using `SafeAreaView` with top/left/right insets, absolute sticky CTA positioned over navigation bar inset (`Math.max(insets.bottom, 16)`), and ScrollView `contentContainerStyle` with 130 dp bottom padding to eliminate content occlusion behind the sticky button.
+  5. **Player Route Integration:**
+     - Fullscreen player route (`/player`) wired to `useSessionStore` and `useDatabase`, presenting friendly narrator names, protocol duration, breathing ring cue, and session exit confirmation dialog.
+- **Rationale:**
+  - Satisfies every design token, typography spec, haptic requirement, and interaction rule from Master Plan Part 1.
+  - Retains pure offline performance with zero network calls and sub-millisecond local SQLite queries.
+- **Architectural Impact:**
+  - Added full test coverage in `__tests__/features/sanctuary.test.ts`. Total test suite expanded to 14 test suites, 117 tests passing across both IST (`Asia/Kolkata`) and EST (`America/New_York`).
+  - Zero TypeScript errors (`npx tsc --noEmit`), zero ESLint warnings (`npm run lint`), 100% Prettier formatting compliance.

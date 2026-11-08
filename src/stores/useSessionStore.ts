@@ -23,7 +23,7 @@ interface SessionStoreState extends SessionState {
   setPostState: (state: PerceivedState | null) => void;
   setMode: (mode: RestMode) => void;
   setVoice: (voiceId: string) => void;
-  setAmbientBed: (bedId: string) => void;
+  setAmbientBed: (bedId: string | null) => void;
   setSigh: (enabled: boolean) => void;
   setProtocol: (protocolId: ProtocolId) => void;
   resetSession: () => void;
@@ -40,7 +40,7 @@ export const useSessionStore = create<SessionStoreState>((set) => ({
   setPostState: (postState) => set({ postState }),
   setMode: (mode) => set({ mode }),
   setVoice: (voiceId) => set({ voiceId }),
-  setAmbientBed: (ambientBedId) => set({ ambientBedId }),
+  setAmbientBed: (ambientBedId) => set({ ambientBedId: ambientBedId ?? 'off' }),
   setSigh: (sigh) => set({ sigh }),
   setProtocol: (protocolId) => set({ protocolId }),
   resetSession: () => set(INITIAL_SESSION_STATE),

@@ -6,10 +6,20 @@
 
 import { create } from 'zustand';
 
-export type SheetType = 'none' | 'journey' | 'paywall' | 'voice_picker' | 'dev' | 'morning_checkin';
+export type SheetType =
+  'none' | 'journey' | 'paywall' | 'voice_picker' | 'ambient_picker' | 'dev' | 'morning_checkin';
 
 export interface SheetPayload {
-  paywallVariant?: 'card_tap' | 'post_taste' | 'settings' | 'general';
+  paywallVariant?:
+    | 'card_tap'
+    | 'post_taste'
+    | 'settings'
+    | 'general'
+    | 'bed_locked'
+    | 'voice_locked'
+    | 'insights'
+    | 'pass_expired'
+    | 'pro_expired';
   voicePickerContext?: 'sanctuary' | 'player';
   [key: string]: unknown;
 }

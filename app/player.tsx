@@ -12,11 +12,29 @@ import { colors, radii, spacing, typography } from '../src/design/tokens';
 import { hapticModeToggle } from '../src/design/haptics';
 import { useSheetStore } from '../src/stores/useSheetStore';
 import { useSessionStore } from '../src/stores/useSessionStore';
+import { useDatabase } from '../src/providers/DatabaseProvider';
+
+const PROTOCOL_NAMES: Record<string, string> = {
+  rapid_reset_5: 'Rapid Reset',
+  afternoon_recharge_10: 'Afternoon Recharge',
+  deep_rest_30: 'Deep Rest & Yoga Nidra',
+};
+
+const PROTOCOL_DURATIONS: Record<string, string> = {
+  rapid_reset_5: '05:00',
+  afternoon_recharge_10: '10:00',
+  deep_rest_30: '30:00',
+};
 
 export default function PlayerScreen() {
   const router = useRouter();
   const openSheet = useSheetStore((state) => state.openSheet);
-  const { mode, voiceId, isPlaying, setPlaying } = useSessionStore();
+  const { mode, voiceId, protocolId, isPlaying, setPlaying } = useSessionStore();
+  const { voiceRepo } = useDatabase();
+
+  const voiceName = voiceRepo.getById(voiceId)?.name ?? 'Maya';
+  const protocolTitle = PROTOCOL_NAMES[protocolId] ?? 'Guided Rest';
+  const durationText = PROTOCOL_DURATIONS[protocolId] ?? '10:00';
 
   const handleClose = () => {
     Alert.alert('End Session?', 'Leaving now will pause your restorative rest.', [
@@ -48,14 +66,19 @@ export default function PlayerScreen() {
           accessibilityRole="button"
           accessibilityLabel="Switch narrator voice"
         >
-          <Text style={styles.voiceText}>Narrator: {voiceId}</Text>
+          <Text style={styles.voiceText}>Narrator: {voiceName}</Text>
         </Pressable>
+      </View>
+
+      {/* Protocol title */}
+      <View style={styles.titleContainer}>
+        <Text style={styles.protocolTitle}>{protocolTitle}</Text>
       </View>
 
       {/* Center Breathing Ring / Timer Container */}
       <View style={styles.centerContainer}>
         <View style={styles.orbitalRingPlaceholder}>
-          <Text style={styles.timerText}>05:00</Text>
+          <Text style={styles.timerText}>{durationText}</Text>
           <Text style={styles.cueText}>Inhale gently through nose</Text>
         </View>
         <Text style={styles.modeIndicator}>
@@ -119,7 +142,14 @@ const styles = StyleSheet.create({
   voiceText: {
     ...typography.caption,
     color: colors.accent,
-    textTransform: 'capitalize',
+  },
+  titleContainer: {
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  protocolTitle: {
+    ...typography.title,
+    color: colors.text,
   },
   centerContainer: {
     flex: 1,
@@ -154,7 +184,7 @@ const styles = StyleSheet.create({
   },
   modeIndicator: {
     ...typography.caption,
-    color: colors.textFaint,
+    color: colors.textMuted,
     marginTop: spacing.xl,
   },
   controlsContainer: {

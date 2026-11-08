@@ -1,176 +1,139 @@
 /**
  * Sanctuary Screen (Route: "/")
  * Master Plan Part 1 §2.3
- * 2-tap entry into rest.
+ * 2-tap entry into rest. Complete responsive layout with sticky CTA and SQLite persistence.
  */
 
-import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, layout, radii, spacing, typography } from '../src/design/tokens';
-import {
-  hapticBeginRest,
-  hapticCardSelect,
-  hapticLockedCardTap,
-  hapticModeToggle,
-} from '../src/design/haptics';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors, spacing } from '../src/design/tokens';
+import { hapticCardSelect, hapticLockedCardTap } from '../src/design/haptics';
 import { getTimeContext } from '../src/domain/timeOfDay';
 import type { ProtocolId } from '../src/domain/constants';
+import type { Mode } from '../src/data/types';
+import { useDatabase } from '../src/providers/DatabaseProvider';
 import { useSheetStore } from '../src/stores/useSheetStore';
 import { useSessionStore } from '../src/stores/useSessionStore';
-
-interface ProtocolCard {
-  id: ProtocolId;
-  durationLabel: string;
-  name: string;
-  description: string;
-  isPro: boolean;
-}
-
-const CARDS: ProtocolCard[] = [
-  {
-    id: 'rapid_reset_5',
-    durationLabel: '5 min',
-    name: 'Rapid Reset',
-    description: 'Acute stress · pre-meeting release',
-    isPro: false,
-  },
-  {
-    id: 'afternoon_recharge_10',
-    durationLabel: '10 min',
-    name: 'Afternoon Recharge',
-    description: 'Post-lunch circadian focus restore',
-    isPro: false,
-  },
-  {
-    id: 'deep_rest_30',
-    durationLabel: '30 min',
-    name: 'Deep Rest & Yoga Nidra',
-    description: 'Parasympathetic recovery · sleep wind-down',
-    isPro: true,
-  },
-];
+import { TopBar } from '../src/features/sanctuary/TopBar';
+import { GreetingBlock } from '../src/features/sanctuary/GreetingBlock';
+import { SessionCardList } from '../src/features/sanctuary/SessionCardList';
+import { ModeToggle } from '../src/features/sanctuary/ModeToggle';
+import { AmbientChips } from '../src/features/sanctuary/AmbientChips';
+import { VoiceAndPacerRow } from '../src/features/sanctuary/VoiceAndPacerRow';
+import { BeginRestButton } from '../src/features/sanctuary/BeginRestButton';
 
 export default function SanctuaryScreen() {
   const router = useRouter();
-  const timeContext = getTimeContext(new Date());
+  const insets = useSafeAreaInsets();
+  const [now] = useState(() => Date.now());
+  const timeContext = useMemo(() => getTimeContext(new Date(now)), [now]);
 
-  const [selectedCardId, setSelectedCardId] = useState<ProtocolId>(timeContext.protocolId);
-  const [mode, setMode] = useState<'focus' | 'sleep'>('focus');
-
+  const { preferences, updatePreferences, isPro, activePass } = useDatabase();
   const openSheet = useSheetStore((state) => state.openSheet);
-  const { setProtocol, setMode: setSessionMode } = useSessionStore();
+  const { resetSession, setProtocol, setMode, setVoice, setAmbientBed, setSigh } =
+    useSessionStore();
 
-  const handleSelectCard = (card: ProtocolCard) => {
-    if (card.isPro) {
+  // Selected session protocol
+  const [selectedProtocolId, setSelectedProtocolId] = useState<ProtocolId>(timeContext.protocolId);
+
+  // Selected mode (Focus / Sleep)
+  const [currentMode, setCurrentMode] = useState<Mode>(
+    preferences.lastMode ?? (timeContext.greeting === 'Good evening' ? 'sleep' : 'focus'),
+  );
+
+  const hasFreePass = Boolean(activePass && activePass.status === 'available');
+  const freePassRemainingDays = activePass?.expiresAtMs
+    ? Math.max(0, Math.ceil((activePass.expiresAtMs - now) / 86_400_000))
+    : undefined;
+
+  const isCurrentCardLocked = selectedProtocolId === 'deep_rest_30' && !isPro && !hasFreePass;
+
+  const handleSelectCard = (protocolId: ProtocolId) => {
+    setSelectedProtocolId(protocolId);
+
+    const isLocked = protocolId === 'deep_rest_30' && !isPro && !hasFreePass;
+    if (isLocked) {
       hapticLockedCardTap();
       openSheet('paywall', { paywallVariant: 'card_tap' });
-      return;
+    } else {
+      hapticCardSelect();
     }
-    hapticCardSelect();
-    setSelectedCardId(card.id);
   };
 
-  const handleBeginRest = () => {
-    hapticBeginRest();
-    setProtocol(selectedCardId);
-    setSessionMode(mode);
+  const handleModeChange = (newMode: Mode) => {
+    setCurrentMode(newMode);
+    updatePreferences({ lastMode: newMode });
+  };
+
+  const handleBeginRestUnlocked = () => {
+    resetSession();
+    setProtocol(selectedProtocolId);
+    setMode(selectedProtocolId === 'rapid_reset_5' ? 'focus' : currentMode);
+    setVoice(preferences.selectedVoiceId);
+    setAmbientBed(preferences.ambientBedId);
+    setSigh(selectedProtocolId === 'rapid_reset_5' ? true : preferences.sighPacerDefault);
+
     router.push('/player');
   };
 
+  const handleBeginRestLocked = () => {
+    openSheet('paywall', { paywallVariant: 'card_tap' });
+  };
+
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: 130 + Math.max(insets.bottom, spacing.base) },
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Top Bar with Streak Pill */}
-        <View style={styles.topBar}>
-          <Pressable
-            style={styles.streakPill}
-            onPress={() => openSheet('journey')}
-            accessibilityRole="button"
-            accessibilityLabel="View streak journey"
-          >
-            <View style={styles.emberDot} />
-            <Text style={styles.streakText}>4 days</Text>
-          </Pressable>
-        </View>
+        {/* TopBar with Streak Pill */}
+        <TopBar />
 
-        {/* Greeting Block */}
-        <View style={styles.greetingBlock}>
-          <Text style={styles.greetingHeadline}>{timeContext.greeting}</Text>
-          <Text style={styles.greetingContext}>{timeContext.contextLine}</Text>
-        </View>
+        {/* Greeting & Context Line */}
+        <GreetingBlock selectedProtocolId={selectedProtocolId} />
 
-        {/* 3-Tier Session Cards */}
-        <View style={styles.cardList}>
-          {CARDS.map((card) => {
-            const isSelected = selectedCardId === card.id;
-            return (
-              <Pressable
-                key={card.id}
-                style={[styles.card, isSelected && styles.cardSelected]}
-                onPress={() => handleSelectCard(card)}
-                accessibilityRole="button"
-              >
-                <View style={styles.cardHeader}>
-                  <Text style={styles.durationTag}>{card.durationLabel}</Text>
-                  {card.isPro && (
-                    <View style={styles.proBadge}>
-                      <Text style={styles.proBadgeText}>PRO</Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={styles.cardTitle}>{card.name}</Text>
-                <Text style={styles.cardDescription}>{card.description}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        {/* 3-Tier Canonical Session Card List */}
+        <SessionCardList
+          selectedId={selectedProtocolId}
+          isPro={isPro}
+          hasFreePass={hasFreePass}
+          freePassRemainingDays={freePassRemainingDays}
+          onSelectCard={handleSelectCard}
+        />
 
-        {/* Mode Toggle (visible for 10m & 30m cards) */}
-        {selectedCardId !== 'rapid_reset_5' && (
-          <View style={styles.modeToggleContainer}>
-            <View style={styles.modeTogglePill}>
-              <Pressable
-                style={[styles.modeOption, mode === 'focus' && styles.modeOptionActive]}
-                onPress={() => {
-                  hapticModeToggle();
-                  setMode('focus');
-                }}
-              >
-                <Text style={[styles.modeText, mode === 'focus' && styles.modeTextActive]}>
-                  ☼ Focus
-                </Text>
-              </Pressable>
-
-              <Pressable
-                style={[styles.modeOption, mode === 'sleep' && styles.modeOptionActive]}
-                onPress={() => {
-                  hapticModeToggle();
-                  setMode('sleep');
-                }}
-              >
-                <Text style={[styles.modeText, mode === 'sleep' && styles.modeTextActive]}>
-                  ☾ Sleep
-                </Text>
-              </Pressable>
-            </View>
-          </View>
+        {/* Mode Toggle (Focus / Sleep for 10m & 30m sessions) */}
+        {selectedProtocolId !== 'rapid_reset_5' && (
+          <ModeToggle mode={currentMode} onModeChange={handleModeChange} />
         )}
 
-        {/* Bottom space for sticky CTA */}
-        <View style={styles.bottomSpacer} />
+        {/* Soundscape Ambient Chips */}
+        <AmbientChips
+          selectedBedId={preferences.ambientBedId}
+          onSelectBed={(bedId) => updatePreferences({ ambientBedId: bedId })}
+        />
+
+        {/* Voice and Sigh Pacer Row */}
+        <VoiceAndPacerRow selectedProtocolId={selectedProtocolId} />
       </ScrollView>
 
-      {/* Sticky Bottom Container for Begin Rest CTA */}
-      <View style={styles.stickyCtaContainer}>
-        <Pressable style={styles.beginButton} onPress={handleBeginRest} accessibilityRole="button">
-          <Text style={styles.beginButtonText}>Begin Rest</Text>
-        </Pressable>
+      {/* Sticky Bottom Container for 72 dp CTA */}
+      <View
+        style={[
+          styles.stickyBottomContainer,
+          { paddingBottom: Math.max(insets.bottom, spacing.base) },
+        ]}
+      >
+        <BeginRestButton
+          isLocked={isCurrentCardLocked}
+          onPressUnlocked={handleBeginRestUnlocked}
+          onPressLocked={handleBeginRestLocked}
+        />
       </View>
     </SafeAreaView>
   );
@@ -186,146 +149,22 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: spacing.screenPaddingHorizontal,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xxxl,
+    paddingTop: spacing.xs,
   },
-  topBar: {
-    height: layout.topBarHeight,
-    justifyContent: 'center',
-  },
-  streakPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: radii.pill,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    alignSelf: 'flex-start',
-    minHeight: 36,
-    gap: spacing.sm,
-  },
-  emberDot: {
-    width: 8,
-    height: 8,
-    borderRadius: radii.pill,
-    backgroundColor: colors.accent,
-  },
-  streakText: {
-    ...typography.caption,
-    color: colors.text,
-  },
-  greetingBlock: {
-    marginTop: spacing.md,
-    marginBottom: spacing.xl,
-    gap: spacing.xs,
-  },
-  greetingHeadline: {
-    ...typography.display,
-  },
-  greetingContext: {
-    ...typography.body,
-    color: colors.textMuted,
-  },
-  cardList: {
-    gap: spacing.md,
-  },
-  card: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: radii.card,
-    padding: spacing.base,
-    minHeight: layout.sessionCardHeight,
-    justifyContent: 'center',
-  },
-  cardSelected: {
-    backgroundColor: colors.surfaceRaised,
-    borderColor: colors.accent,
-    shadowColor: colors.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-  },
-  durationTag: {
-    ...typography.caption,
-    color: colors.accent,
-  },
-  proBadge: {
-    backgroundColor: colors.accent,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radii.pill,
-  },
-  proBadgeText: {
-    ...typography.badge,
-    color: colors.onAccent,
-  },
-  cardTitle: {
-    ...typography.cardTitle,
-    color: colors.text,
-  },
-  cardDescription: {
-    ...typography.body,
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.textMuted,
-  },
-  modeToggleContainer: {
-    marginTop: spacing.base,
-    alignItems: 'center',
-  },
-  modeTogglePill: {
-    flexDirection: 'row',
-    backgroundColor: colors.surface,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 3,
-  },
-  modeOption: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.base,
-    borderRadius: radii.pill,
-  },
-  modeOptionActive: {
-    backgroundColor: colors.surfaceRaised,
-  },
-  modeText: {
-    ...typography.label,
-    color: colors.textMuted,
-  },
-  modeTextActive: {
-    color: colors.text,
-  },
-  bottomSpacer: {
-    height: 100,
-  },
-  stickyCtaContainer: {
+  stickyBottomContainer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
+    backgroundColor: colors.bg,
+    borderTopWidth: 1,
+    borderColor: colors.border,
     paddingHorizontal: spacing.screenPaddingHorizontal,
-    paddingBottom: spacing.base,
-    backgroundColor: 'transparent',
-  },
-  beginButton: {
-    height: layout.stickyCtaHeight,
-    borderRadius: radii.button,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  beginButtonText: {
-    ...typography.title,
-    color: colors.onAccent,
+    paddingTop: spacing.base,
+    shadowColor: colors.bg,
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.9,
+    shadowRadius: 16,
+    elevation: 8,
   },
 });

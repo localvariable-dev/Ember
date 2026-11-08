@@ -1,91 +1,61 @@
 /**
  * Root Sheet Host
  * Master Plan Part 1 §2.2 & Part 6 §7.2
- * Mounts Journey, Paywall, and VoicePicker modal bottom sheets above all routes.
+ * Mounts Journey, Paywall, VoicePicker, and AmbientPicker sheets above all routes.
+ * Strictly guarantees only one sheet is open at any time.
  */
 
 import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSheetStore } from '../stores/useSheetStore';
 import { colors, radii, spacing, typography } from '../design/tokens';
+import { JourneySheet } from '../features/journey/JourneySheet';
+import { PaywallSheet } from '../features/paywall/PaywallSheet';
+import { VoicePickerSheet } from '../features/sanctuary/VoicePickerSheet';
+import { AmbientPickerSheet } from '../features/sanctuary/AmbientPickerSheet';
+
+function DevSheet() {
+  const closeSheet = useSheetStore((state) => state.closeSheet);
+  return (
+    <View style={styles.devSheetContainer}>
+      <View style={styles.sheetHandle} />
+      <Text style={styles.sheetTitle}>Developer Panel</Text>
+      <Text style={styles.sheetSubtitle}>
+        Time-travel and entitlement state controls for testing.
+      </Text>
+      <Pressable style={styles.closeButton} onPress={closeSheet}>
+        <Text style={styles.closeButtonText}>Close</Text>
+      </Pressable>
+    </View>
+  );
+}
 
 export function SheetHost() {
-  const { activeSheet, closeSheet, payload } = useSheetStore();
+  const { activeSheet, closeSheet } = useSheetStore();
 
   if (activeSheet === 'none') {
     return null;
   }
 
-  const renderSheetContent = () => {
-    switch (activeSheet) {
-      case 'journey':
-        return (
-          <View style={styles.sheetContent}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Your Rest Journey</Text>
-            <Text style={styles.sheetSubtitle}>
-              Consistency over perfection. Grace Days protect your habit.
-            </Text>
-            <Pressable style={styles.closeButton} onPress={closeSheet}>
-              <Text style={styles.closeButtonText}>Close</Text>
-            </Pressable>
-          </View>
-        );
-
-      case 'paywall':
-        return (
-          <View style={styles.sheetContent}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Deep Rest &amp; Yoga Nidra</Text>
-            <Text style={styles.sheetSubtitle}>
-              Unlock 30-minute restorative sessions, advanced soundscapes, and full Calm Delta
-              insights.
-            </Text>
-            {payload.paywallVariant ? (
-              <Text style={styles.variantTag}>Mode: {payload.paywallVariant}</Text>
-            ) : null}
-            <Pressable style={styles.closeButton} onPress={closeSheet}>
-              <Text style={styles.closeButtonText}>Dismiss</Text>
-            </Pressable>
-          </View>
-        );
-
-      case 'voice_picker':
-        return (
-          <View style={styles.sheetContent}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Narrator Voice</Text>
-            <Text style={styles.sheetSubtitle}>Switch narrator seamlessly during playback.</Text>
-            <Pressable style={styles.closeButton} onPress={closeSheet}>
-              <Text style={styles.closeButtonText}>Done</Text>
-            </Pressable>
-          </View>
-        );
-
-      case 'dev':
-        return (
-          <View style={styles.sheetContent}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Developer Panel</Text>
-            <Text style={styles.sheetSubtitle}>
-              Time-travel and entitlement state controls for testing.
-            </Text>
-            <Pressable style={styles.closeButton} onPress={closeSheet}>
-              <Text style={styles.closeButtonText}>Close</Text>
-            </Pressable>
-          </View>
-        );
-
-      default:
-        return null;
-    }
-  };
-
   return (
-    <Modal transparent animationType="fade" visible={true} onRequestClose={closeSheet}>
+    <Modal
+      transparent
+      animationType="fade"
+      visible={true}
+      onRequestClose={closeSheet}
+      statusBarTranslucent
+    >
       <View style={styles.scrim}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={closeSheet} />
-        <View style={styles.sheetContainer}>{renderSheetContent()}</View>
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={closeSheet}
+          accessibilityLabel="Dismiss sheet backdrop"
+        />
+        {activeSheet === 'journey' && <JourneySheet />}
+        {activeSheet === 'paywall' && <PaywallSheet />}
+        {activeSheet === 'voice_picker' && <VoicePickerSheet />}
+        {activeSheet === 'ambient_picker' && <AmbientPickerSheet />}
+        {activeSheet === 'dev' && <DevSheet />}
       </View>
     </Modal>
   );
@@ -97,7 +67,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.scrim,
     justifyContent: 'flex-end',
   },
-  sheetContainer: {
+  devSheetContainer: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radii.sheet,
     borderTopRightRadius: radii.sheet,
@@ -107,6 +77,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxxl,
     paddingHorizontal: spacing.screenPaddingHorizontal,
     minHeight: 280,
+    gap: spacing.md,
   },
   sheetHandle: {
     width: 36,
@@ -116,9 +87,6 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: spacing.base,
   },
-  sheetContent: {
-    gap: spacing.md,
-  },
   sheetTitle: {
     ...typography.title,
     color: colors.text,
@@ -126,10 +94,6 @@ const styles = StyleSheet.create({
   sheetSubtitle: {
     ...typography.body,
     color: colors.textMuted,
-  },
-  variantTag: {
-    ...typography.caption,
-    color: colors.accent,
   },
   closeButton: {
     marginTop: spacing.base,
