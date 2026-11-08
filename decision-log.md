@@ -518,3 +518,32 @@ This document tracks all significant product, architectural, technical, and engi
   - Web export (`npx expo export --platform web`) succeeds with 0 errors (1,489 modules bundled cleanly).
   - All 21 test suites and 172 tests continue passing in < 1.4s across all timezones.
   - Zero TypeScript errors (`npx tsc --noEmit`), zero ESLint warnings, 100% Prettier formatting compliance.
+
+---
+
+### ADR-020: Standard SVG Container Rotation & Elimination of Kebab-Case DOM Properties
+
+- **Date:** 2026-11-08
+- **Status:** Accepted
+- **Context:**
+  During Player playback on React Native Web, React 19 raised a console warning:
+  ```text
+  Invalid DOM property `transform-origin`. Did you mean `transformOrigin`?
+  Stack:
+  react-native-svg/lib/module/web/WebShape.js
+  OrbitalRing
+  src/features/player/OrbitalRing.tsx:132:9
+  ```
+  Root Cause:
+  `react-native-svg`'s web renderer (`WebShape.js` / `utils/prepare.js`) translates the `origin` prop on SVG components (`<Circle origin="x, y" />`) directly into a kebab-case DOM attribute `clean['transform-origin']`. React 19 strictly validates DOM property casing on rendered elements, flagging `transform-origin` as invalid.
+- **Decision:**
+  1. Remove `rotation="-90"` and `origin={`${ringSize / 2}, ${ringSize / 2}`}` props from SVG child elements in both `OrbitalRing.tsx` and `SighPacer.tsx`.
+  2. Apply `transform: [{ rotate: '-90deg' }]` directly to the parent `<Svg>` container style (`styles.svg` / `styles.svgOverlay`).
+  3. The geometric center of the 280x280 SVG container acts as the rotation anchor across React Native Web, Android, and iOS natively, starting the progress arc at 12 o'clock and sweeping clockwise without invoking `react-native-svg`'s web `transform-origin` mapper.
+- **Rationale:**
+  - Fully conforms to React 19 DOM attribute standards on Web.
+  - Retains 100% pixel-perfect visual appearance, clockwise progress sweep, and breathing orb alignment.
+  - Completely cross-platform across Web, Android, and iOS without touching `node_modules` or global suppression.
+- **Architectural Impact:**
+  - Zero console warnings or DOM property errors during Player playback, pause, resume, or completion.
+  - All 21 Jest suites and 172 tests pass. Web export succeeds cleanly.

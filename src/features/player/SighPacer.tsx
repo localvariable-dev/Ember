@@ -173,8 +173,6 @@ export function SighPacer({ mode, onDone, onSkip, onClose }: SighPacerProps) {
               strokeDashoffset={strokeDashoffset}
               strokeLinecap="round"
               fill="transparent"
-              rotation="-90"
-              origin={`${ringSize / 2}, ${ringSize / 2}`}
             />
           </Svg>
 
@@ -277,6 +275,7 @@ const styles = StyleSheet.create({
   },
   svgOverlay: {
     position: 'absolute',
+    transform: [{ rotate: '-90deg' }],
   },
   breathingOrb: {
     width: 200,
