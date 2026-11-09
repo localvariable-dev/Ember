@@ -7,7 +7,7 @@
  */
 
 import React from 'react';
-import { GestureResponderEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radii, spacing, typography } from '../../design/tokens';
 import { hapticCardSelect } from '../../design/haptics';
 
@@ -42,12 +42,22 @@ function SliderRow({
   accessibilityLabel,
 }: SliderRowProps) {
   const [trackWidth, setTrackWidth] = React.useState(160);
-
-  const handleTouch = (evt: GestureResponderEvent) => {
-    const x = evt.nativeEvent.locationX;
-    const clampedRatio = Math.max(0, Math.min(1, x / trackWidth));
-    onValueChange(clampedRatio);
-  };
+  const [trackPageX, setTrackPageX] = React.useState(0);
+  const trackRef = React.useRef<React.ElementRef<typeof View>>(null);
+  const updateFromPageX = React.useCallback(
+    (pageX: number) => onValueChange(Math.max(0, Math.min(1, (pageX - trackPageX) / trackWidth))),
+    [onValueChange, trackPageX, trackWidth],
+  );
+  const panResponder = React.useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (event) => updateFromPageX(event.nativeEvent.pageX),
+        onPanResponderMove: (_event, gesture) => updateFromPageX(gesture.moveX),
+      }),
+    [updateFromPageX],
+  );
 
   return (
     <View style={styles.sliderRow}>
@@ -58,10 +68,14 @@ function SliderRow({
       </View>
 
       {/* Slider Track (48dp touch target) */}
-      <Pressable
+      <View
+        ref={trackRef}
         style={styles.sliderTouchTarget}
-        onPress={handleTouch}
-        onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
+        {...panResponder.panHandlers}
+        onLayout={(e) => {
+          setTrackWidth(e.nativeEvent.layout.width);
+          trackRef.current?.measureInWindow((x) => setTrackPageX(x));
+        }}
         accessibilityRole="adjustable"
         accessibilityLabel={accessibilityLabel}
         accessibilityValue={{ min: 0, max: 100, now: Math.round(value * 100) }}
@@ -70,7 +84,7 @@ function SliderRow({
           <View style={[styles.trackFill, { width: `${Math.round(value * 100)}%` }]} />
         </View>
         <View style={[styles.thumb, { left: `${Math.round(value * 100)}%` }]} />
-      </Pressable>
+      </View>
 
       {/* Selector Chip */}
       <Pressable

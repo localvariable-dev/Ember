@@ -40,7 +40,7 @@ export function StreakPill() {
 
   return (
     <Pressable
-      style={styles.pill}
+      style={({ pressed }) => [styles.pill, pressed && styles.pillPressed]}
       onPress={() => openSheet('journey')}
       accessibilityRole="button"
       accessibilityLabel={`Streak: ${streakLabel}. Tap to view rest journey.`}
@@ -51,6 +51,9 @@ export function StreakPill() {
         {isHeldByGrace && <View style={styles.graceRing} />}
       </View>
       <Text style={styles.label}>{streakLabel}</Text>
+      <View style={styles.divider} />
+      <Text style={styles.affordance}>{streakNumber === 0 ? 'Begin' : 'View streak'}</Text>
+      <Text style={styles.chevron}>›</Text>
     </Pressable>
   );
 }
@@ -59,14 +62,19 @@ const styles = StyleSheet.create({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
+    backgroundColor: '#111416',
+    borderColor: 'rgba(233,160,75,0.30)',
     borderWidth: 1,
-    borderRadius: radii.pill,
-    height: 32,
-    paddingHorizontal: spacing.md,
+    borderRadius: 18,
+    minHeight: 44,
+    paddingHorizontal: spacing.base,
     alignSelf: 'flex-start',
     gap: spacing.sm,
+  },
+  pillPressed: {
+    backgroundColor: 'rgba(233,160,75,0.12)',
+    borderColor: colors.accent,
+    transform: [{ scale: 0.98 }],
   },
   ringContainer: {
     width: 16,
@@ -92,5 +100,22 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.text,
     fontWeight: '500',
+  },
+  divider: {
+    width: 1,
+    height: 18,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    marginHorizontal: 2,
+  },
+  affordance: {
+    ...typography.caption,
+    color: '#E9A04B',
+    fontSize: 12,
+  },
+  chevron: {
+    color: '#E9A04B',
+    fontSize: 21,
+    lineHeight: 22,
+    marginLeft: -4,
   },
 });

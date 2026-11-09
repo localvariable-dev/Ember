@@ -124,8 +124,8 @@ export function OrbitalRing({ positionMs, durationMs, currentCue, isPlaying }: O
           cx={ringSize / 2}
           cy={ringSize / 2}
           r={radius}
-          stroke={colors.border}
-          strokeWidth={strokeWidth}
+          stroke="rgba(255,255,255,0.10)"
+          strokeWidth={3}
           fill="transparent"
         />
         {/* Progress Arc */}
@@ -134,7 +134,7 @@ export function OrbitalRing({ positionMs, durationMs, currentCue, isPlaying }: O
           cy={ringSize / 2}
           r={radius}
           stroke={colors.accent}
-          strokeWidth={strokeWidth}
+          strokeWidth={3}
           strokeDasharray={circumference}
           strokeDashoffset={strokeDashoffset}
           strokeLinecap="round"
@@ -144,17 +144,12 @@ export function OrbitalRing({ positionMs, durationMs, currentCue, isPlaying }: O
 
       {/* Middle: Breathing Orb */}
       {!reduceMotion ? (
-        <Animated.View
-          style={[
-            styles.breathingOrb,
-            {
-              transform: [{ scale: effectiveScale }],
-            },
-          ]}
-        >
-          <View style={styles.innerGlow} />
-          <View style={styles.coreDot} />
-        </Animated.View>
+        <View style={styles.orbHalo}>
+          <Animated.View style={[styles.breathingOrb, { transform: [{ scale: effectiveScale }] }]}>
+            <View style={styles.innerGlow} />
+            <View style={styles.coreDot} />
+          </Animated.View>
+        </View>
       ) : (
         <View style={styles.staticOrb}>
           <View style={styles.coreDot} />
@@ -179,7 +174,9 @@ const styles = StyleSheet.create({
     width: 190,
     height: 190,
     borderRadius: 95,
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
+    backgroundColor: 'rgba(245, 158, 11, 0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(251,191,36,0.20)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -188,7 +185,19 @@ const styles = StyleSheet.create({
     height: 130,
     borderRadius: 65,
     backgroundColor: 'rgba(245, 158, 11, 0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(251,191,36,0.16)',
     position: 'absolute',
+  },
+  orbHalo: {
+    width: 204,
+    height: 204,
+    borderRadius: 102,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(245,158,11,0.035)',
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.08)',
   },
   staticOrb: {
     width: 130,

@@ -7,7 +7,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, spacing, stateColors, typography } from '../../design/tokens';
+import { colors, spacing, typography } from '../../design/tokens';
 import type { RecoveryState } from '../../data/types';
 import { hapticCardSelect } from '../../design/haptics';
 
@@ -18,6 +18,8 @@ interface PreStateStripProps {
 }
 
 const ORB_STATES: RecoveryState[] = [1, 2, 3, 4, 5];
+const MOOD_LABELS = ['Drained', 'Tense', 'Neutral', 'Calm', 'Energized'];
+const MOOD_COLORS = ['#9A766A', '#D97745', '#A8A29E', '#D6A84B', '#E9C875'];
 
 export function PreStateStrip({ positionMs, onSelectState, selectedState }: PreStateStripProps) {
   const [chosenState, setChosenState] = useState<RecoveryState | null>(selectedState ?? null);
@@ -78,23 +80,22 @@ export function PreStateStrip({ positionMs, onSelectState, selectedState }: PreS
       <Text style={styles.promptText}>How are you arriving?</Text>
 
       <View style={styles.orbsRow}>
-        {ORB_STATES.map((state) => {
-          const item = stateColors[state];
+        {ORB_STATES.map((state, index) => {
           const isSelected = chosenState === state;
 
           return (
             <Pressable
               key={state}
-              style={styles.touchTarget}
+              style={[styles.touchTarget, isSelected && styles.touchTargetSelected]}
               onPress={() => handleSelect(state)}
               accessibilityRole="radio"
               accessibilityState={{ selected: isSelected }}
-              accessibilityLabel={`${item.label}, ${state} of 5`}
+              accessibilityLabel={`${MOOD_LABELS[index]}, ${state} of 5`}
             >
               <Animated.View
                 style={[
                   styles.orb,
-                  { backgroundColor: item.color },
+                  { backgroundColor: MOOD_COLORS[index] },
                   isSelected && {
                     transform: [{ scale: pulseScale }],
                     borderWidth: 2,
@@ -102,6 +103,9 @@ export function PreStateStrip({ positionMs, onSelectState, selectedState }: PreS
                   },
                 ]}
               />
+              <Text style={[styles.moodLabel, isSelected && styles.moodLabelSelected]}>
+                {MOOD_LABELS[index]}
+              </Text>
             </Pressable>
           );
         })}
@@ -125,18 +129,37 @@ const styles = StyleSheet.create({
   orbsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
+    gap: 2,
+    width: '100%',
+    paddingHorizontal: spacing.md,
+    justifyContent: 'space-between',
   },
   touchTarget: {
-    width: 36,
-    height: 36,
+    flex: 1,
+    minWidth: 48,
+    minHeight: 56,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 14,
+    gap: 5,
+  },
+  touchTargetSelected: {
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderColor: 'rgba(245,158,11,0.4)',
+    borderWidth: 1,
+  },
+  moodLabel: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontSize: 10,
+    letterSpacing: 0,
+  },
+  moodLabelSelected: {
+    color: colors.text,
   },
   orb: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
   },
 });

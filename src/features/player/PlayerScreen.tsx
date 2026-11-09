@@ -62,6 +62,22 @@ export function PlayerScreen() {
 
   const [timerVisible, setTimerVisible] = useState(mode !== 'sleep');
   const [showSummary, setShowSummary] = useState(false);
+  const [voiceVolume, setVoiceVolume] = useState(preferences.voiceVolume);
+  const [ambientVolume, setAmbientVolume] = useState(preferences.ambientVolume);
+  const handleVoiceVolumeChange = useCallback(
+    (volume: number) => {
+      setVoiceVolume(volume);
+      controller.setVoiceVolume(volume);
+    },
+    [controller],
+  );
+  const handleAmbientVolumeChange = useCallback(
+    (volume: number) => {
+      setAmbientVolume(volume);
+      controller.setAmbientVolume(volume);
+    },
+    [controller],
+  );
 
   // Screen auto-dimming in Sleep mode
   const dimOpacity = useMemo(() => new Animated.Value(1), []);
@@ -234,7 +250,7 @@ export function PlayerScreen() {
   // Render ACTIVE or ENDING Stage
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Pressable style={styles.touchConsumer} onPress={resetDimTimer}>
+      <View style={styles.touchConsumer} onTouchStart={resetDimTimer}>
         <Animated.View style={[styles.playerContent, { opacity: dimOpacity }]}>
           {/* Top Bar */}
           <View style={styles.topBar}>
@@ -290,18 +306,18 @@ export function PlayerScreen() {
             />
 
             <MixerSliders
-              voiceVolume={preferences.voiceVolume}
-              ambientVolume={preferences.ambientVolume}
+              voiceVolume={voiceVolume}
+              ambientVolume={ambientVolume}
               voiceDisplayName={voiceName}
               ambientDisplayName={bedDisplayName}
-              onVoiceVolumeChange={(v) => controller.setVoiceVolume(v)}
-              onAmbientVolumeChange={(v) => controller.setAmbientVolume(v)}
+              onVoiceVolumeChange={handleVoiceVolumeChange}
+              onAmbientVolumeChange={handleAmbientVolumeChange}
               onVoiceChipPress={() => openSheet('voice_picker', { voicePickerContext: 'player' })}
               onBedChipPress={handleCycleBed}
             />
           </View>
         </Animated.View>
-      </Pressable>
+      </View>
     </SafeAreaView>
   );
 }
@@ -309,7 +325,7 @@ export function PlayerScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: '#070709',
   },
   touchConsumer: {
     flex: 1,
@@ -318,6 +334,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'space-between',
     paddingBottom: spacing.md,
+    paddingHorizontal: spacing.md,
   },
   topBar: {
     flexDirection: 'row',
@@ -325,13 +342,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.screenPaddingHorizontal,
     paddingTop: spacing.sm,
-    height: 56,
+    height: 68,
+    marginHorizontal: spacing.sm,
+    marginTop: spacing.xs,
   },
   closeBtn: {
-    width: 44,
-    height: 44,
+    width: 48,
+    height: 48,
     borderRadius: radii.pill,
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.035)',
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
@@ -346,7 +365,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.md,
     borderRadius: radii.pill,
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.045)',
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -358,14 +377,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
+    paddingVertical: spacing.sm,
   },
   cueArea: {
     alignItems: 'center',
-    marginTop: spacing.md,
+    marginTop: spacing.lg,
     minHeight: 64,
   },
   bottomSection: {
     justifyContent: 'flex-end',
+    marginHorizontal: spacing.xs,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.08)',
   },
   sleepDoneContainer: {
     flex: 1,

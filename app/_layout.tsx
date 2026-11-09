@@ -3,8 +3,8 @@
  * Master Plan Part 1 §2.2 & Part 6 §7.2
  */
 
-import React, { useEffect, useRef } from 'react';
-import { AppState, Platform, StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, Platform, StyleSheet } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -27,6 +27,7 @@ import {
   syncNotificationSchedule,
 } from '../src/services/NotificationService';
 import * as Notifications from 'expo-notifications';
+import { StartupExperience } from '../src/components/StartupExperience';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // Splash screen already prevented
@@ -145,16 +146,15 @@ export default function RootLayout() {
     Inter_500Medium,
     Inter_600SemiBold,
   });
+  const [startupComplete, setStartupComplete] = useState(false);
+  const finishStartup = useCallback(() => {
+    setStartupComplete(true);
+    SplashScreen.hideAsync().catch(() => {});
+  }, []);
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync().catch(() => {});
-    }
+    if (fontsLoaded || fontError) SplashScreen.hideAsync().catch(() => {});
   }, [fontsLoaded, fontError]);
-
-  if (!fontsLoaded && !fontError) {
-    return <View style={styles.container} />;
-  }
 
   return (
     <GestureHandlerRootView style={styles.container}>
@@ -182,6 +182,12 @@ export default function RootLayout() {
           <SheetHost />
         </SessionProvider>
       </DatabaseProvider>
+      {!startupComplete && (
+        <StartupExperience
+          exiting={fontsLoaded || Boolean(fontError)}
+          onExitComplete={finishStartup}
+        />
+      )}
     </GestureHandlerRootView>
   );
 }
