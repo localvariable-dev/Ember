@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">EMBER app icon</title>
+  <desc id="desc">A warm amber ember sheltered by a quiet ivory crescent.</desc>
+  <rect width="256" height="256" fill="#151719"/>
+  <path d="M65 157C55 108 79 70 119 62c40-8 78 20 75 70" fill="none" stroke="#F4EFE6" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="130" cy="153" r="12" fill="#E9A04B"/>
+</svg>

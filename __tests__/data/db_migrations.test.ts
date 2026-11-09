@@ -90,12 +90,12 @@ describe('Database & Migrations', () => {
 
     const firstRun = migrate(db);
     expect(firstRun.previousVersion).toBe(0);
-    expect(firstRun.newVersion).toBe(2);
+    expect(firstRun.newVersion).toBe(3);
 
     // Run again
     const secondRun = migrate(db);
-    expect(secondRun.previousVersion).toBe(2);
-    expect(secondRun.newVersion).toBe(2);
+    expect(secondRun.previousVersion).toBe(3);
+    expect(secondRun.newVersion).toBe(3);
 
     // Singletons still exist with single row
     const streakCount = db.first<{ count: number }>(
@@ -124,7 +124,7 @@ describe('Database & Migrations', () => {
     // Run migrate(db)
     const upgradeResult = migrate(db);
     expect(upgradeResult.previousVersion).toBe(1);
-    expect(upgradeResult.newVersion).toBe(2);
+    expect(upgradeResult.newVersion).toBe(3);
 
     // Assert theta_6hz upgraded to free
     const bed = db.first<{ tier: string }>('SELECT tier FROM ambient_beds WHERE id = ?;', [

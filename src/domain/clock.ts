@@ -9,8 +9,14 @@ export interface Clock {
 }
 
 export class SystemClock implements Clock {
+  private readonly epochAtStart = Date.now();
+  private readonly monotonicAtStart = globalThis.performance?.now?.() ?? 0;
+
   now(): number {
-    return Date.now();
+    const monotonicNow = globalThis.performance?.now?.();
+    return monotonicNow === undefined
+      ? Date.now()
+      : this.epochAtStart + (monotonicNow - this.monotonicAtStart);
   }
 }
 

@@ -12,9 +12,10 @@ import { useDatabase } from '../../providers/DatabaseProvider';
 import { useSheetStore } from '../../stores/useSheetStore';
 import { projectStreak } from '../../domain/streakEngine';
 import { dayKeyFromMs } from '../../domain/dayKey';
+import { hapticCardSelect } from '../../design/haptics';
 
 export function StreakPill() {
-  const { streak } = useDatabase();
+  const { streak, preferences } = useDatabase();
   const openSheet = useSheetStore((state) => state.openSheet);
 
   const [now] = useState(() => Date.now());
@@ -38,10 +39,19 @@ export function StreakPill() {
   const streakNumber = isLapsed ? 0 : streak.currentStreak;
   const streakLabel = `${streakNumber} ${streakNumber === 1 ? 'day' : 'days'}`;
 
+  const handlePress = () => {
+    hapticCardSelect(preferences.hapticsEnabled);
+    openSheet('journey');
+  };
+
   return (
     <Pressable
-      style={({ pressed }) => [styles.pill, pressed && styles.pillPressed]}
-      onPress={() => openSheet('journey')}
+      style={({ pressed }) => [
+        styles.pill,
+        isDoneToday && styles.pillDoneToday,
+        pressed && styles.pillPressed,
+      ]}
+      onPress={handlePress}
       accessibilityRole="button"
       accessibilityLabel={`Streak: ${streakLabel}. Tap to view rest journey.`}
       accessibilityHint="Opens journey sheet"
@@ -52,7 +62,9 @@ export function StreakPill() {
       </View>
       <Text style={styles.label}>{streakLabel}</Text>
       <View style={styles.divider} />
-      <Text style={styles.affordance}>{streakNumber === 0 ? 'Begin' : 'View streak'}</Text>
+      <Text style={[styles.affordance, isDoneToday && styles.affordanceDone]}>
+        {isDoneToday ? 'Rest complete' : streakNumber === 0 ? 'Begin' : 'View streak'}
+      </Text>
       <Text style={styles.chevron}>›</Text>
     </Pressable>
   );
@@ -75,6 +87,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(233,160,75,0.12)',
     borderColor: colors.accent,
     transform: [{ scale: 0.98 }],
+  },
+  pillDoneToday: {
+    borderColor: 'rgba(245, 158, 11, 0.45)',
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
   },
   ringContainer: {
     width: 16,
@@ -111,6 +127,10 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: '#E9A04B',
     fontSize: 12,
+  },
+  affordanceDone: {
+    color: colors.accentSoft,
+    fontWeight: '600',
   },
   chevron: {
     color: '#E9A04B',

@@ -26,8 +26,8 @@ export const colors = {
   scrim: 'rgba(0, 0, 0, 0.72)', // Sheet backdrop
   dangerMuted: '#9A3412', // Destructive confirmations only (reset data)
 
-  // Sleep mode auto-dim multiplier
-  dimMultiplier: 0.38,
+  // Active-session auto-dim multiplier, preserving readable controls and timer
+  dimMultiplier: 0.72,
 } as const;
 
 /**

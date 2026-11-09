@@ -14,6 +14,7 @@ import type { UserEntitlement } from '../../data/types';
 
 interface MembershipCardProps {
   isPro: boolean;
+  trialExpiresAtMs: number | null;
   activePass: UserEntitlement | null;
   activeVoiceId: string;
 }
@@ -23,7 +24,12 @@ const VOICE_DISPLAY_NAMES: Record<string, string> = {
   arjun_deep: 'Arjun (Deep & Resonant)',
 };
 
-export function MembershipCard({ isPro, activePass, activeVoiceId }: MembershipCardProps) {
+export function MembershipCard({
+  isPro,
+  trialExpiresAtMs,
+  activePass,
+  activeVoiceId,
+}: MembershipCardProps) {
   const openSheet = useSheetStore((state) => state.openSheet);
   const [tapCount, setTapCount] = useState(0);
   const [now] = useState(() => Date.now());
@@ -40,6 +46,12 @@ export function MembershipCard({ isPro, activePass, activeVoiceId }: MembershipC
     tierTitle = 'Ember Pro';
     tierSubtitle = 'Full catalog, custom voices & deep analytics unlocked.';
     showUpgrade = false;
+    if (trialExpiresAtMs) {
+      const hoursLeft = Math.max(1, Math.ceil((trialExpiresAtMs - now) / 3_600_000));
+      tierTitle = 'Your 3-day Pro trial';
+      tierSubtitle = `All Pro features are active. Trial ends in ${hoursLeft} ${hoursLeft === 1 ? 'hour' : 'hours'}; no charge at expiry.`;
+      showUpgrade = true;
+    }
   } else if (activePass && activePass.status === 'available') {
     const daysLeft = activePass.expiresAtMs
       ? Math.max(0, Math.ceil((activePass.expiresAtMs - now) / 86_400_000))

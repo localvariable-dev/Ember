@@ -1,6 +1,6 @@
 {
   "asset_version": 1,
-  "generated_at": "2026-11-08T17:06:23.969Z",
+  "generated_at": "2026-11-09T09:38:28.496Z",
   "protocols": [
     {
       "id": "rapid_reset_5",
@@ -273,13 +273,13 @@
         "arjun_deep": {
           "voice_id": "arjun_deep",
           "delivery": "bundled",
-          "placeholder": true,
+          "placeholder": false,
           "filename_focus": "afternoon_recharge_10.focus.ogg",
           "filename_sleep": "afternoon_recharge_10.sleep.ogg",
-          "sha256_focus": "9fe0106e97054d420f564b2397271826192511a42d24a79efc4c44750ae7f1df",
-          "sha256_sleep": "1afcf4def75a7c94ee7f84eb2cd4227641ad18eff8f9063ede89886d92d08c7d",
-          "bytes_focus": 1203699,
-          "bytes_sleep": 1203699,
+          "sha256_focus": "f2fba7d4c673375f8710f9145930a9d2e705a21b5e01032ecff1b35cd7af1554",
+          "sha256_sleep": "f2fba7d4c673375f8710f9145930a9d2e705a21b5e01032ecff1b35cd7af1554",
+          "bytes_focus": 1859491,
+          "bytes_sleep": 1859491,
           "duration_ms": 600000,
           "cues_focus": [
             {

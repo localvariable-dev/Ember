@@ -7,18 +7,19 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radii, spacing, typography } from '../../design/tokens';
-import { hapticModeToggle } from '../../design/haptics';
+import { hapticMoodSelect } from '../../design/haptics';
 import type { Mode } from '../../data/types';
 
 interface ModeToggleProps {
   mode: Mode;
   onModeChange: (newMode: Mode) => void;
+  hapticsEnabled?: boolean;
 }
 
-export function ModeToggle({ mode, onModeChange }: ModeToggleProps) {
+export function ModeToggle({ mode, onModeChange, hapticsEnabled = true }: ModeToggleProps) {
   const handleToggle = (targetMode: Mode) => {
     if (targetMode !== mode) {
-      hapticModeToggle();
+      hapticMoodSelect(hapticsEnabled);
       onModeChange(targetMode);
     }
   };

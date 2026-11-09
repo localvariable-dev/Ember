@@ -184,4 +184,22 @@ describe('notificationPlanner: planNextNotification', () => {
     const planned = planNextNotification(input);
     expect(planned?.body).toBe('Day 5 is one quiet session away.');
   });
+
+  it('provides gentle milestone encouragement when approaching a milestone (e.g. 7 days)', () => {
+    const input: PlannerInput = {
+      now: baseNow,
+      enabled: true,
+      reminderMin: null,
+      medianCommitMin: null,
+      creditedToday: false,
+      sleepSessionsLast7d: 0,
+      daysSinceLastOpen: 0,
+      lapsedSentCount: 0,
+      currentStreak: 6, // approaching 7-day milestone
+      isHeldByGrace: false,
+    };
+
+    const planned = planNextNotification(input);
+    expect(planned?.body).toBe('Day 7 is one quiet session away. 1 week of rest ahead.');
+  });
 });

@@ -38,8 +38,17 @@ export class EntitlementServiceImpl implements EntitlementService {
   }
 
   async init(): Promise<void> {
+    await this.ensureTrial();
     await this.expireStale();
     this.refresh();
+  }
+
+  async ensureTrial(): Promise<boolean> {
+    const hasPriorEntitlement = this.repo.all().some((row) => row.productId !== 'ember_pro_trial');
+    if (hasPriorEntitlement) return false;
+    const changed = this.repo.grantTrial(generateUuid(), this.clock.now());
+    if (changed) this.refresh();
+    return changed;
   }
 
   getSnapshot(): EntitlementSnapshot {
@@ -85,7 +94,11 @@ export class EntitlementServiceImpl implements EntitlementService {
       (r) =>
         r.kind === 'subscription' &&
         (r.status === 'expired' ||
-          (r.expiresAtMs !== null && nowMs >= r.expiresAtMs + OFFLINE_GRACE_MS)),
+          (r.productId === 'ember_pro_trial'
+            ? r.expiresAtMs !== null && nowMs >= r.expiresAtMs
+            : r.source === 'app' && r.productId === 'ember_pro_admin'
+              ? r.expiresAtMs !== null && nowMs >= r.expiresAtMs
+              : r.expiresAtMs !== null && nowMs >= r.expiresAtMs + OFFLINE_GRACE_MS)),
     );
 
     if (hasConsumedPass) {

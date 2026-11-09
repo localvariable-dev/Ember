@@ -143,8 +143,9 @@ describe('Repository CRUD Operations', () => {
       });
 
       expect(repo.hasActivePro(now)).toBe(true);
-      // Expired in distant future
-      expect(repo.hasActivePro(now + 600_000)).toBe(false);
+      // Purchased subscriptions retain the configured three-day offline grace.
+      expect(repo.hasActivePro(now + 600_000)).toBe(true);
+      expect(repo.hasActivePro(now + 600_000 + 3 * 86_400_000 + 1)).toBe(false);
 
       // Lifetime overrides expiry
       repo.upsert({

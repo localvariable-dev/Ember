@@ -7,16 +7,25 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../../design/tokens';
-import { hapticModeToggle } from '../../design/haptics';
+import { hapticPlaybackPause, hapticPlaybackStart } from '../../design/haptics';
 
 interface TransportControlsProps {
   isPlaying: boolean;
   onTogglePlayPause: () => void;
+  hapticsEnabled?: boolean;
 }
 
-export function TransportControls({ isPlaying, onTogglePlayPause }: TransportControlsProps) {
+export function TransportControls({
+  isPlaying,
+  onTogglePlayPause,
+  hapticsEnabled = true,
+}: TransportControlsProps) {
   const handlePress = () => {
-    hapticModeToggle();
+    if (isPlaying) {
+      hapticPlaybackPause(hapticsEnabled);
+    } else {
+      hapticPlaybackStart(hapticsEnabled);
+    }
     onTogglePlayPause();
   };
 

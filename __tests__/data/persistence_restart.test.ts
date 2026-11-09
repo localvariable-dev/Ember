@@ -100,8 +100,8 @@ describe('Application Restart Persistence', () => {
 
     // Verify migration is a safe no-op on restart
     const migResult = migrate(db);
-    expect(migResult.previousVersion).toBe(2);
-    expect(migResult.newVersion).toBe(2);
+    expect(migResult.previousVersion).toBe(3);
+    expect(migResult.newVersion).toBe(3);
 
     // Re-initialize repositories
     sessionRepo = new SessionRepo(db);

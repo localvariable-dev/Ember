@@ -273,6 +273,17 @@ export const MIGRATIONS: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 3,
+    name: '003_once_per_install_pro_trial',
+    up(db: Db): void {
+      db.exec(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_one_pro_trial_per_install
+        ON user_entitlements(product_id)
+        WHERE product_id = 'ember_pro_trial';
+      `);
+    },
+  },
 ];
 
 export interface MigrationResult {

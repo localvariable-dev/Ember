@@ -7,7 +7,7 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, layout, radii, spacing, typography } from '../../design/tokens';
-import { hapticBeginRest, hapticLockedCardTap } from '../../design/haptics';
+import { hapticLockedCardTap, hapticSessionEnter } from '../../design/haptics';
 import { useDatabase } from '../../providers/DatabaseProvider';
 
 interface BeginRestButtonProps {
@@ -36,10 +36,10 @@ export function BeginRestButton({
 
   const handlePress = () => {
     if (isLocked) {
-      hapticLockedCardTap();
+      hapticLockedCardTap(preferences.hapticsEnabled);
       onPressLocked();
     } else {
-      hapticBeginRest();
+      hapticSessionEnter(preferences.hapticsEnabled);
       onPressUnlocked();
     }
   };

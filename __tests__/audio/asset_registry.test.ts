@@ -10,6 +10,7 @@ import {
   getAmbientBedMetadata,
   getProtocolAudioMetadata,
 } from '../../src/audio/assetRegistry.generated';
+import { BUNDLED_AUDIO_SOURCES } from '../../src/audio/assetSources';
 import { verifySha256 } from '../../src/audio/assetRegistry';
 
 describe('Asset Registry & Metadata Architecture', () => {
@@ -54,9 +55,13 @@ describe('Asset Registry & Metadata Architecture', () => {
     it('clearly marks missing Maya 10m and 30m recordings as placeholders', () => {
       const maya10Focus = getVoiceTrackMetadata('afternoon_recharge_10', 'maya_warm', 'focus');
       expect(maya10Focus?.isPlaceholder).toBe(true);
+      expect(maya10Focus?.assetKey).toBe('voice_maya_afternoon_recharge_10_focus');
+      expect(BUNDLED_AUDIO_SOURCES[maya10Focus!.assetKey]).toBeDefined();
 
       const maya10Sleep = getVoiceTrackMetadata('afternoon_recharge_10', 'maya_warm', 'sleep');
       expect(maya10Sleep?.isPlaceholder).toBe(true);
+      expect(maya10Sleep?.assetKey).toBe('voice_maya_afternoon_recharge_10_sleep');
+      expect(BUNDLED_AUDIO_SOURCES[maya10Sleep!.assetKey]).toBeDefined();
 
       const maya30Focus = getVoiceTrackMetadata('deep_rest_30', 'maya_warm', 'focus');
       expect(maya30Focus?.isPlaceholder).toBe(true);
@@ -65,12 +70,20 @@ describe('Asset Registry & Metadata Architecture', () => {
       expect(maya30Sleep?.isPlaceholder).toBe(true);
     });
 
-    it('clearly marks all Arjun recordings as placeholders until studio capture', () => {
+    it('bundles Arjun 10m in both modes while keeping unrelated Arjun sessions placeholders', () => {
       const arjun5 = getVoiceTrackMetadata('rapid_reset_5', 'arjun_deep', 'focus');
       expect(arjun5?.isPlaceholder).toBe(true);
 
-      const arjun10 = getVoiceTrackMetadata('afternoon_recharge_10', 'arjun_deep', 'focus');
-      expect(arjun10?.isPlaceholder).toBe(true);
+      const arjun10Focus = getVoiceTrackMetadata('afternoon_recharge_10', 'arjun_deep', 'focus');
+      const arjun10Sleep = getVoiceTrackMetadata('afternoon_recharge_10', 'arjun_deep', 'sleep');
+      expect(arjun10Focus?.isPlaceholder).toBe(false);
+      expect(arjun10Sleep?.isPlaceholder).toBe(false);
+      expect(arjun10Focus?.durationMs).toBe(600_000);
+      expect(arjun10Sleep?.durationMs).toBe(600_000);
+      expect(arjun10Focus?.assetKey).toBe('voice_arjun_afternoon_recharge_10_focus');
+      expect(arjun10Sleep?.assetKey).toBe('voice_arjun_afternoon_recharge_10_sleep');
+      expect(BUNDLED_AUDIO_SOURCES[arjun10Focus!.assetKey]).toBeDefined();
+      expect(BUNDLED_AUDIO_SOURCES[arjun10Sleep!.assetKey]).toBeDefined();
 
       const arjun30 = getVoiceTrackMetadata('deep_rest_30', 'arjun_deep', 'sleep');
       expect(arjun30?.isPlaceholder).toBe(true);

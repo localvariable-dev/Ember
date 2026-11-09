@@ -128,7 +128,17 @@ export function planNextNotification(i: PlannerInput): PlannedNotification | nul
     // Daily copy
     const streak = i.currentStreak ?? 0;
     if (streak >= 3 && !i.isHeldByGrace) {
-      body = `Day ${streak + 1} is one quiet session away.`;
+      if (streak + 1 === 7) {
+        body = 'Day 7 is one quiet session away. 1 week of rest ahead.';
+      } else if (streak + 1 === 14) {
+        body = 'Day 14 is one quiet session away. 2 weeks of rest ahead.';
+      } else if (streak + 1 === 30) {
+        body = 'Day 30 is one quiet session away. 1 month of rest ahead.';
+      } else if (streak + 1 === 100) {
+        body = 'Day 100 is one quiet session away. 100 days of rest ahead.';
+      } else {
+        body = `Day ${streak + 1} is one quiet session away.`;
+      }
     } else if (p >= 13 * 60 && p < 20 * 60) {
       body = 'The afternoon dip is here. Ten minutes?';
     } else {

@@ -4,6 +4,7 @@
  */
 
 import { MockAudioDriver } from '../../src/audio/MockAudioDriver';
+import { BUNDLED_AUDIO_SOURCES } from '../../src/audio/assetSources';
 import type { Db } from '../../src/data/db';
 import { openTestDatabase } from '../helpers/testDb';
 import { MIGRATIONS } from '../../src/data/migrations';
@@ -77,6 +78,23 @@ describe('SessionController', () => {
     expect(controller.getEngine().getIsPlaying()).toBe(true);
   });
 
+  it('rejects duplicate session starts while native audio preparation is pending', async () => {
+    const options = {
+      protocolId: 'rapid_reset_5' as const,
+      mode: 'focus' as const,
+      voiceId: 'maya_warm',
+      ambientBedId: null,
+      sigh: false,
+    };
+
+    const firstStart = controller.startSession(options);
+    await expect(controller.startSession(options)).rejects.toThrow(
+      'A rest session is already active or starting.',
+    );
+    await expect(firstStart).resolves.toBeDefined();
+    expect(sessionRepo.findInProgress()).toHaveLength(1);
+  });
+
   it('persists periodic heartbeats every 5 seconds to SQLite', async () => {
     const sessionId = await controller.startSession({
       protocolId: 'rapid_reset_5',
@@ -102,6 +120,55 @@ describe('SessionController', () => {
     session = sessionRepo.getById(sessionId);
     expect(session?.heartbeatAtMs).toBe(clock.now());
     expect(session?.maxPositionMs).toBe(10_000);
+  });
+
+  it.each([
+    ['rapid_reset_5', 300_000],
+    ['afternoon_recharge_10', 600_000],
+    ['deep_rest_30', 1_800_000],
+  ] as const)(
+    'keeps %s duration aligned through pause and resume',
+    async (protocolId, durationMs) => {
+      await controller.startSession({
+        protocolId,
+        mode: 'focus',
+        voiceId: 'maya_warm',
+        ambientBedId: null,
+        sigh: false,
+      });
+      expect(controller.getMachineState().plannedMs).toBe(durationMs);
+
+      const player = driver.createdPlayers[0];
+      controller.pause();
+      player?.simulateTick(30_000, durationMs);
+      expect(controller.getMachineState().listenedMs).toBe(0);
+
+      controller.play();
+      player?.simulateTick(60_000, durationMs);
+      expect(controller.getMachineState().listenedMs).toBe(30_000);
+    },
+  );
+
+  it('preserves elapsed time across repeated background interruptions and resume', async () => {
+    await controller.startSession({
+      protocolId: 'afternoon_recharge_10',
+      mode: 'focus',
+      voiceId: 'maya_warm',
+      ambientBedId: null,
+      sigh: false,
+    });
+    const player = driver.createdPlayers[0];
+    player?.simulateTick(10_000, 600_000);
+    controller.pauseForBackground();
+    controller.pauseForBackground();
+    player?.simulateTick(90_000, 600_000);
+
+    expect(controller.getMachineState().isPlaying).toBe(false);
+    expect(controller.getMachineState().listenedMs).toBe(10_000);
+
+    controller.play();
+    player?.simulateTick(100_000, 600_000);
+    expect(controller.getMachineState().listenedMs).toBe(20_000);
   });
 
   it('silently auto-commits sleep mode sessions at 85% threshold', async () => {
@@ -154,6 +221,34 @@ describe('SessionController', () => {
     // Verify user preferences persisted choice
     const prefs = prefsRepo.get();
     expect(prefs.selectedVoiceId).toBe('arjun_deep');
+  });
+
+  it('routes the 10-minute Maya and Arjun selections to their own bundled recordings', async () => {
+    await controller.startSession({
+      protocolId: 'afternoon_recharge_10',
+      mode: 'focus',
+      voiceId: 'maya_warm',
+      ambientBedId: null,
+      sigh: false,
+    });
+
+    const mayaPlayer = driver.createdPlayers[0];
+    expect(mayaPlayer?.source).toBe(BUNDLED_AUDIO_SOURCES.voice_maya_afternoon_recharge_10_focus);
+    mayaPlayer?.simulateTick(30_000, 600_000);
+
+    const switchPromise = controller.switchVoice('arjun_deep');
+    await Promise.resolve();
+    jest.advanceTimersByTime(1500);
+    await expect(switchPromise).resolves.toBe(true);
+
+    const arjunPlayer = driver.createdPlayers[1];
+    expect(arjunPlayer?.source).toBe(BUNDLED_AUDIO_SOURCES.voice_arjun_afternoon_recharge_10_focus);
+    expect(arjunPlayer?.seekCalls).toContain(30_000);
+    expect(mayaPlayer?.isReleased).toBe(true);
+    expect(arjunPlayer?.isPlaying).toBe(true);
+    expect(controller.getMachineState().voiceId).toBe('arjun_deep');
+    expect(sessionRepo.findInProgress()[0]?.voiceId).toBe('arjun_deep');
+    expect(prefsRepo.get().selectedVoiceId).toBe('arjun_deep');
   });
 
   it('records pre-checkin and post-checkin perceived states in SQLite', async () => {

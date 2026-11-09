@@ -26,6 +26,7 @@ import { CalmDeltaCard } from './CalmDeltaCard';
 import { SessionRow } from './SessionRow';
 import { ProInsightsTeaser } from './ProInsightsTeaser';
 import { MembershipCard } from './MembershipCard';
+import { getPersonalProgressInsight } from '../../domain/motivation';
 import {
   requestNotificationPermission,
   syncNotificationSchedule,
@@ -36,6 +37,7 @@ export function JourneySheet() {
     streak,
     isPro,
     activePass,
+    entitlementService,
     sessionRepo,
     ledgerRepo,
     prefsRepo,
@@ -61,6 +63,19 @@ export function JourneySheet() {
     () => (isPro ? sessionRepo.listAll() : sessionRepo.listRecent(7)),
     [sessionRepo, isPro],
   );
+
+  const personalInsight = useMemo(() => {
+    let avgDelta: number | undefined;
+    if (pairedSessions.length >= 2) {
+      const deltas = pairedSessions.map((p) => p.postState - p.preState);
+      avgDelta = deltas.reduce((a, b) => a + b, 0) / deltas.length;
+    }
+    return getPersonalProgressInsight({
+      totalSessions: stats.sessions,
+      totalCommittedMs: stats.minutes * 60_000,
+      averageCalmDelta: avgDelta ?? null,
+    });
+  }, [pairedSessions, stats]);
 
   const handleToggleReminder = async (enabled: boolean) => {
     if (enabled) {
@@ -103,6 +118,17 @@ export function JourneySheet() {
 
         {/* 3. Aggregate Stats */}
         <StatsRow minutes={stats.minutes} sessions={stats.sessions} />
+
+        {/* Personal Progress Insight */}
+        {personalInsight && (
+          <View style={styles.insightBox}>
+            <View style={styles.insightHeader}>
+              <Text style={styles.insightSparkle}>✦</Text>
+              <Text style={styles.insightTitle}>Personal Progress</Text>
+            </View>
+            <Text style={styles.insightBody}>{personalInsight}</Text>
+          </View>
+        )}
 
         {/* 4. Calm Delta Insight Card */}
         <CalmDeltaCard pairedSessions={pairedSessions} isPro={isPro} nowMs={now} />
@@ -151,6 +177,7 @@ export function JourneySheet() {
         {/* 7. Membership & Voices Card */}
         <MembershipCard
           isPro={isPro}
+          trialExpiresAtMs={entitlementService.getSnapshot().trialExpiresAtMs}
           activePass={activePass}
           activeVoiceId={preferences.selectedVoiceId}
         />
@@ -247,6 +274,37 @@ const styles = StyleSheet.create({
     ...typography.body,
     fontSize: 13,
     color: colors.textMuted,
+  },
+  insightBox: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    gap: 4,
+  },
+  insightHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  insightSparkle: {
+    color: colors.accentSoft,
+    fontSize: 12,
+  },
+  insightTitle: {
+    ...typography.caption,
+    color: colors.textFaint,
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    fontWeight: '600',
+  },
+  insightBody: {
+    ...typography.body,
+    color: colors.textMuted,
+    fontSize: 13,
+    lineHeight: 18,
   },
   reminderCard: {
     flexDirection: 'row',

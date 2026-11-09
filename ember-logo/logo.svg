@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 850 220" role="img" aria-labelledby="title desc">
+  <title id="title">EMBER logo</title>
+  <desc id="desc">A warm amber ember sheltered by a quiet ivory crescent, beside the EMBER wordmark.</desc>
+  <g transform="translate(8 8) scale(.78)">
+    <path d="M65 157C55 108 79 70 119 62c40-8 78 20 75 70" fill="none" stroke="#F4EFE6" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="130" cy="153" r="12" fill="#E9A04B"/>
+  </g>
+  <text x="220" y="142" fill="#F4EFE6" font-family="Avenir Next, Inter, Helvetica Neue, Arial, sans-serif" font-size="72" font-weight="500" letter-spacing="15">EMBER</text>
+</svg>

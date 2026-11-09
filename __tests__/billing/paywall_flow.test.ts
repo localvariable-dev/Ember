@@ -52,6 +52,9 @@ describe('Paywall Flow & Dynamic Anchoring Calculations', () => {
 
   describe('Decoupled Controller & Entitlement Update Flow', () => {
     it('updates entitlement state from free to pro upon successful purchase', async () => {
+      // Advance clock past the 72-hour trial to test the expired/free state
+      clock.advance(72 * 60 * 60 * 1000 + 1);
+      await entitlementService.expireStale();
       expect(entitlementService.getSnapshot().level).toBe('free');
 
       // Execute purchase through billing service
@@ -73,7 +76,9 @@ describe('Paywall Flow & Dynamic Anchoring Calculations', () => {
       // Simulate prior purchase in store
       await billingService.devGrant('ember_pro_monthly');
 
-      // Local db is fresh (free)
+      // Advance clock past the 72-hour trial so local db is free
+      clock.advance(72 * 60 * 60 * 1000 + 1);
+      await entitlementService.expireStale();
       expect(entitlementService.getSnapshot().level).toBe('free');
 
       // Trigger restore

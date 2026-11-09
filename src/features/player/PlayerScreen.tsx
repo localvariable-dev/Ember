@@ -20,6 +20,15 @@ import { getVoiceTrackMetadata, PROTOCOLS_METADATA } from '../../audio/assetRegi
 import { useDatabase } from '../../providers/DatabaseProvider';
 import { useSessionStore } from '../../stores/useSessionStore';
 import { useSheetStore } from '../../stores/useSheetStore';
+import { evaluateDailyGoal, getMilestoneCelebration } from '../../domain/dailyGoal';
+import {
+  getEncouragingMessage,
+  getPersonalProgressInsight,
+  getNextSessionSuggestion,
+  type MotivationContext,
+} from '../../domain/motivation';
+import { hapticNavBack } from '../../design/haptics';
+import { dayKeyFromMs } from '../../domain/dayKey';
 import { CueLabel } from './CueLabel';
 import { MixerSliders } from './MixerSliders';
 import { OrbitalRing } from './OrbitalRing';
@@ -44,7 +53,7 @@ const BED_DISPLAY_NAMES: Record<string, string> = {
 export function PlayerScreen() {
   const router = useRouter();
   const controller = useSessionController();
-  const { voiceRepo, preferences, isPro, streak } = useDatabase();
+  const { voiceRepo, preferences, isPro, streak, sessionRepo, ledgerRepo } = useDatabase();
   const openSheet = useSheetStore((state) => state.openSheet);
 
   const {
@@ -64,6 +73,68 @@ export function PlayerScreen() {
   const [showSummary, setShowSummary] = useState(false);
   const [voiceVolume, setVoiceVolume] = useState(preferences.voiceVolume);
   const [ambientVolume, setAmbientVolume] = useState(preferences.ambientVolume);
+  const [now] = useState(() => Date.now());
+
+  // Habit formation, daily goal, motivation & insights
+  const today = useMemo(() => dayKeyFromMs(now), [now]);
+  const todayLedger = useMemo(() => ledgerRepo.getByDay(today), [ledgerRepo, today]);
+  const stats = useMemo(() => sessionRepo.getStats(), [sessionRepo]);
+  const paired = useMemo(() => sessionRepo.getPairedSessions(), [sessionRepo]);
+
+  const dailyGoalStatus = useMemo(
+    () => evaluateDailyGoal(todayLedger, streak, true),
+    [todayLedger, streak],
+  );
+
+  const milestoneDetails = useMemo(
+    () => getMilestoneCelebration(streak.currentStreak),
+    [streak.currentStreak],
+  );
+
+  const encouragingMessage = useMemo(() => {
+    const motivationCtx: MotivationContext = {
+      totalCompletedSessions: stats.sessions,
+      sessionsToday: todayLedger?.sessions ?? 1,
+      currentStreak: streak.currentStreak,
+      longestStreak: streak.longestStreak,
+      isFirstSessionEver: stats.sessions <= 1,
+      isDailyGoalJustCompleted: dailyGoalStatus.isFirstSessionToday,
+      isReturningFromGap:
+        streak.lastCreditDay !== null && streak.currentStreak === 1 && stats.sessions > 1,
+      streakMilestone: dailyGoalStatus.streakMilestone,
+      calmDelta:
+        preState != null && postState != null ? (postState as number) - (preState as number) : null,
+      protocolId,
+    };
+    return getEncouragingMessage(motivationCtx, stats.sessions);
+  }, [
+    stats.sessions,
+    todayLedger?.sessions,
+    streak,
+    dailyGoalStatus,
+    preState,
+    postState,
+    protocolId,
+  ]);
+
+  const personalInsight = useMemo(() => {
+    let avgDelta: number | undefined;
+    if (paired.length >= 2) {
+      const deltas = paired.map((p) => p.postState - p.preState);
+      avgDelta = deltas.reduce((a, b) => a + b, 0) / deltas.length;
+    }
+    return getPersonalProgressInsight({
+      totalSessions: stats.sessions,
+      totalCommittedMs: stats.minutes * 60_000,
+      averageCalmDelta: avgDelta ?? null,
+    });
+  }, [paired, stats]);
+
+  const nextSuggestion = useMemo(
+    () => getNextSessionSuggestion(protocolId ?? 'rapid_reset_5', postState as any),
+    [protocolId, postState],
+  );
+
   const handleVoiceVolumeChange = useCallback(
     (volume: number) => {
       setVoiceVolume(volume);
@@ -93,17 +164,17 @@ export function PlayerScreen() {
 
     if (dimTimeoutRef.current) clearTimeout(dimTimeoutRef.current);
 
-    if (mode === 'sleep' && stage === 'ACTIVE') {
+    if (stage === 'ACTIVE') {
       dimTimeoutRef.current = setTimeout(() => {
-        // Dim to dimMultiplier over 2000ms after 20s of inactivity
+        // Keep controls readable while lowering the overall visual intensity.
         Animated.timing(dimOpacity, {
-          toValue: colors.dimMultiplier,
-          duration: 2000,
+          toValue: 0.72,
+          duration: 1600,
           useNativeDriver: true,
         }).start();
-      }, 20_000);
+      }, 60_000);
     }
-  }, [dimOpacity, mode, stage]);
+  }, [dimOpacity, stage]);
 
   // KeepAwake handling: Focus mode stays awake, Sleep mode allows screen sleep
   useEffect(() => {
@@ -128,6 +199,7 @@ export function PlayerScreen() {
 
   // Close confirmation
   const handleClose = useCallback(() => {
+    hapticNavBack(preferences.hapticsEnabled);
     Alert.alert('End this session?', 'Leaving now will pause your restorative rest.', [
       { text: 'Keep resting', style: 'cancel' },
       {
@@ -139,7 +211,7 @@ export function PlayerScreen() {
         },
       },
     ]);
-  }, [controller, router]);
+  }, [controller, preferences.hapticsEnabled, router]);
 
   // Android hardware back button handler
   useEffect(() => {
@@ -215,6 +287,13 @@ export function PlayerScreen() {
         preState={preState as any}
         postState={postState as any}
         streakCount={streak.currentStreak}
+        protocolId={protocolId}
+        dailyGoalStatus={dailyGoalStatus}
+        encouragingMessage={encouragingMessage}
+        personalInsight={personalInsight}
+        nextSuggestion={nextSuggestion}
+        milestoneDetails={milestoneDetails}
+        hapticsEnabled={preferences.hapticsEnabled}
         onDone={() => {
           controller.dismissSummary();
           router.replace('/');
@@ -303,6 +382,7 @@ export function PlayerScreen() {
             <TransportControls
               isPlaying={isPlaying}
               onTogglePlayPause={() => controller.togglePlayPause()}
+              hapticsEnabled={preferences.hapticsEnabled}
             />
 
             <MixerSliders

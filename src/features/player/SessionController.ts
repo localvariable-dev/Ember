@@ -61,6 +61,7 @@ export class SessionController {
   private engine: DualTrackEngine;
   private machineState: SessionState = { ...INITIAL_SESSION_STATE };
   private activeSessionId: string | null = null;
+  private startingSession = false;
   private cleanupEngineListener: (() => void) | null = null;
   private voiceSwitchInProgress = false;
 
@@ -119,77 +120,85 @@ export class SessionController {
   }
 
   async startSession(opts: StartSessionOptions): Promise<string> {
-    const sessionId = generateUuid();
-    this.activeSessionId = sessionId;
-
-    const now = this.clock.now();
-    const tzOffset = -new Date(now).getTimezoneOffset();
-    const localDay = dayKeyFromMs(now);
-    const plannedMs = PLANNED_MS[opts.protocolId] ?? 300_000;
-
-    const isPro = this.repos.entitlementRepo.hasActivePro();
-    const activePass = this.repos.entitlementRepo.getActivePass();
-    const accessVia = isPro ? 'pro' : activePass ? 'free_pass' : 'free';
-
-    // 1. Create SQLite session log
-    this.repos.sessionRepo.create({
-      id: sessionId,
-      protocolId: opts.protocolId,
-      voiceId: opts.voiceId,
-      mode: opts.mode,
-      ambientBedId: opts.ambientBedId === 'off' ? null : (opts.ambientBedId as any),
-      sighPacer: opts.sigh,
-      accessVia,
-      startedAtMs: now,
-      localDay,
-      tzOffsetMin: tzOffset,
-      plannedMs,
-      preState: opts.preState ?? null,
-    });
-
-    // 2. Resolve audio sources
-    const voiceMeta = getVoiceTrackMetadata(opts.protocolId, opts.voiceId, opts.mode);
-    const voiceSource = resolveAudioSource(voiceMeta?.assetKey);
-    if (!voiceSource) {
-      throw new Error(`Voice asset source not found for ${opts.protocolId} / ${opts.voiceId}`);
+    if (this.startingSession || this.activeSessionId) {
+      throw new Error('A rest session is already active or starting.');
     }
+    this.startingSession = true;
+    try {
+      const sessionId = generateUuid();
+      this.activeSessionId = sessionId;
 
-    const bedMeta =
-      opts.ambientBedId && opts.ambientBedId !== 'off'
-        ? getAmbientBedMetadata(opts.ambientBedId as any)
-        : null;
-    const bedSource = bedMeta ? resolveAudioSource(bedMeta.assetKey) : null;
+      const now = this.clock.now();
+      const tzOffset = -new Date(now).getTimezoneOffset();
+      const localDay = dayKeyFromMs(now);
+      const plannedMs = PLANNED_MS[opts.protocolId] ?? 300_000;
 
-    const prefs = this.repos.prefsRepo.get();
+      const isPro = this.repos.entitlementRepo.hasActivePro();
+      const activePass = this.repos.entitlementRepo.getActivePass();
+      const accessVia = isPro ? 'pro' : activePass ? 'free_pass' : 'free';
 
-    // 3. Prepare DualTrackEngine
-    await this.engine.prepare({
-      voiceSource,
-      voiceId: opts.voiceId,
-      bedSource,
-      mode: opts.mode,
-      plannedMs,
-      voiceVolume: prefs.voiceVolume,
-      ambientVolume: prefs.ambientVolume,
-      title: PROTOCOLS_METADATA[opts.protocolId]?.title ?? 'Ember Rest',
-      subtitle: opts.mode === 'sleep' ? 'Sleep mode' : 'Focus mode',
-    });
+      // 1. Create SQLite session log
+      this.repos.sessionRepo.create({
+        id: sessionId,
+        protocolId: opts.protocolId,
+        voiceId: opts.voiceId,
+        mode: opts.mode,
+        ambientBedId: opts.ambientBedId === 'off' ? null : (opts.ambientBedId as any),
+        sighPacer: opts.sigh,
+        accessVia,
+        startedAtMs: now,
+        localDay,
+        tzOffsetMin: tzOffset,
+        plannedMs,
+        preState: opts.preState ?? null,
+      });
 
-    // 4. Dispatch state machine BEGIN
-    const beginEvent: SessionEvent = {
-      type: 'BEGIN',
-      protocolId: opts.protocolId,
-      mode: opts.mode,
-      voiceId: opts.voiceId,
-      ambientBedId: opts.ambientBedId ?? 'off',
-      sigh: opts.sigh,
-      startedAtMs: now,
-      accessVia,
-      ...(opts.preState ? { preState: opts.preState as PerceivedState } : {}),
-    };
-    this.send(beginEvent);
+      // 2. Resolve audio sources
+      const voiceMeta = getVoiceTrackMetadata(opts.protocolId, opts.voiceId, opts.mode);
+      const voiceSource = resolveAudioSource(voiceMeta?.assetKey);
+      if (!voiceSource) {
+        throw new Error(`Voice asset source not found for ${opts.protocolId} / ${opts.voiceId}`);
+      }
 
-    return sessionId;
+      const bedMeta =
+        opts.ambientBedId && opts.ambientBedId !== 'off'
+          ? getAmbientBedMetadata(opts.ambientBedId as any)
+          : null;
+      const bedSource = bedMeta ? resolveAudioSource(bedMeta.assetKey) : null;
+
+      const prefs = this.repos.prefsRepo.get();
+
+      // 3. Prepare DualTrackEngine
+      await this.engine.prepare({
+        voiceSource,
+        voiceId: opts.voiceId,
+        bedSource,
+        mode: opts.mode,
+        plannedMs,
+        voiceVolume: prefs.voiceVolume,
+        ambientVolume: prefs.ambientVolume,
+        title: PROTOCOLS_METADATA[opts.protocolId]?.title ?? 'Ember Rest',
+        subtitle: opts.mode === 'sleep' ? 'Sleep mode' : 'Focus mode',
+      });
+
+      // 4. Dispatch state machine BEGIN
+      const beginEvent: SessionEvent = {
+        type: 'BEGIN',
+        protocolId: opts.protocolId,
+        mode: opts.mode,
+        voiceId: opts.voiceId,
+        ambientBedId: opts.ambientBedId ?? 'off',
+        sigh: opts.sigh,
+        startedAtMs: now,
+        accessVia,
+        ...(opts.preState ? { preState: opts.preState as PerceivedState } : {}),
+      };
+      this.send(beginEvent);
+
+      return sessionId;
+    } finally {
+      this.startingSession = false;
+    }
   }
 
   startActivePlaybackFromPacer(): void {
@@ -208,6 +217,10 @@ export class SessionController {
   pause(): void {
     hapticModeToggle();
     this.send({ type: 'PAUSE' });
+  }
+
+  pauseForBackground(): void {
+    this.send({ type: 'INTERRUPT' });
   }
 
   togglePlayPause(): void {
@@ -450,6 +463,7 @@ export class SessionController {
   cleanupSession(): void {
     this.engine.dispose();
     this.activeSessionId = null;
+    this.startingSession = false;
     this.voiceSwitchInProgress = false;
     this.machineState = { ...INITIAL_SESSION_STATE };
     useSessionStore.getState().resetSession();

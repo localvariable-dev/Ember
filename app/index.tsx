@@ -18,6 +18,7 @@ import { useSessionStore } from '../src/stores/useSessionStore';
 
 import { TopBar } from '../src/features/sanctuary/TopBar';
 import { GreetingBlock } from '../src/features/sanctuary/GreetingBlock';
+import { DailyGoalProgress } from '../src/features/sanctuary/DailyGoalProgress';
 import { SessionCardList } from '../src/features/sanctuary/SessionCardList';
 import { ModeToggle } from '../src/features/sanctuary/ModeToggle';
 import { AmbientChips } from '../src/features/sanctuary/AmbientChips';
@@ -26,6 +27,9 @@ import { BeginRestButton } from '../src/features/sanctuary/BeginRestButton';
 import { MorningCheckInCard } from '../src/features/player/MorningCheckInCard';
 import { SoftNotificationPrompt } from '../src/features/journey/SoftNotificationPrompt';
 import { useSessionController } from '../src/features/player/SessionProvider';
+import { dayKeyFromMs } from '../src/domain/dayKey';
+import { evaluateDailyGoal } from '../src/domain/dailyGoal';
+import { hapticCardSelect } from '../src/design/haptics';
 import {
   requestNotificationPermission,
   syncNotificationSchedule,
@@ -39,11 +43,13 @@ export default function SanctuaryScreen() {
 
   const {
     sessionRepo,
+    ledgerRepo,
     prefsRepo,
     streakRepo,
     entitlementService,
     preferences,
     updatePreferences,
+    streak,
     isPro,
     activePass,
   } = useDatabase();
@@ -51,6 +57,13 @@ export default function SanctuaryScreen() {
 
   const { resetSession, setProtocol, setMode, setVoice, setAmbientBed, setSigh } =
     useSessionStore();
+
+  const today = useMemo(() => dayKeyFromMs(now), [now]);
+  const todayLedger = useMemo(() => ledgerRepo.getByDay(today), [ledgerRepo, today]);
+  const dailyGoalStatus = useMemo(
+    () => evaluateDailyGoal(todayLedger, streak),
+    [todayLedger, streak],
+  );
 
   const [selectedProtocolId, setSelectedProtocolId] = useState<ProtocolId>(
     () => getTimeContext(new Date(now)).protocolId,
@@ -102,6 +115,7 @@ export default function SanctuaryScreen() {
   const isLocked = isCardLocked(selectedProtocolId);
 
   const handleSelectCard = (id: ProtocolId) => {
+    hapticCardSelect(preferences.hapticsEnabled);
     setSelectedProtocolId(id);
   };
 
@@ -202,6 +216,9 @@ export default function SanctuaryScreen() {
         {/* Greeting & Context Line */}
         <GreetingBlock selectedProtocolId={selectedProtocolId} />
 
+        {/* Daily Rest Goal Progress (1 session/day default) */}
+        <DailyGoalProgress status={dailyGoalStatus} />
+
         {/* 3-Tier Canonical Session Card List */}
         <SessionCardList
           selectedId={selectedProtocolId}
@@ -213,7 +230,11 @@ export default function SanctuaryScreen() {
 
         {/* Mode Toggle (Focus / Sleep for 10m & 30m sessions) */}
         {selectedProtocolId !== 'rapid_reset_5' && (
-          <ModeToggle mode={currentMode} onModeChange={handleModeChange} />
+          <ModeToggle
+            mode={currentMode}
+            onModeChange={handleModeChange}
+            hapticsEnabled={preferences.hapticsEnabled}
+          />
         )}
 
         {/* Soundscape Ambient Chips */}

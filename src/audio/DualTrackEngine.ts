@@ -50,6 +50,7 @@ export class DualTrackEngine {
   private voiceId = 'maya_warm';
   private isPlaying = false;
   private isDisposed = false;
+  private didEmitEnded = false;
   private lockTitle = 'Ember Rest';
   private lockSubtitle = 'Focus mode';
 
@@ -63,6 +64,7 @@ export class DualTrackEngine {
   async prepare(opts: PrepareOpts): Promise<void> {
     this.cleanupPlayers();
     this.isDisposed = false;
+    this.didEmitEnded = false;
 
     await this.driver.configureSession();
 
@@ -122,7 +124,10 @@ export class DualTrackEngine {
 
       if (status.didJustFinish) {
         this.isPlaying = false;
-        this.emit({ type: 'ended' });
+        if (!this.didEmitEnded) {
+          this.didEmitEnded = true;
+          this.emit({ type: 'ended' });
+        }
       }
     });
   }

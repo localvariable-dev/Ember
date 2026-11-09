@@ -172,6 +172,29 @@ describe('DualTrackEngine', () => {
     expect(ambientPlayer?.volume).toBeCloseTo(0.0, 2);
   });
 
+  it('emits natural completion only once if native status repeats didJustFinish', async () => {
+    await engine.prepare({
+      voiceSource: { uri: 'voice_maya.ogg' },
+      voiceId: 'maya_warm',
+      bedSource: null,
+      mode: 'focus',
+      plannedMs: 300_000,
+      voiceVolume: 0.9,
+      ambientVolume: 0.5,
+    });
+    let endedCount = 0;
+    engine.on((event) => {
+      if (event.type === 'ended') endedCount += 1;
+    });
+    engine.start();
+
+    const player = driver.createdPlayers[0];
+    player?.simulateTick(300_000, 300_000, true);
+    player?.simulateTick(300_000, 300_000, true);
+
+    expect(endedCount).toBe(1);
+  });
+
   it('fades ambient over 6s during focus mode ending chime', async () => {
     await engine.prepare({
       voiceSource: { uri: 'voice_maya.ogg' },

@@ -14,8 +14,53 @@ import {
   buildFlacEncodeCommand,
 } from '../../tools/audio/lib/ffmpeg.js';
 import { VoiceStudioAdapter } from '../../tools/audio/tts/VoiceStudioAdapter.js';
+import { execFileSync } from 'node:child_process';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 
 describe('Audio Pipeline Tools & Builders', () => {
+  it('preserves existing real recordings when creating development placeholders', async () => {
+    const baseDir = await mkdtemp(path.join(os.tmpdir(), 'ember-placeholder-preserve-'));
+    const assets = [
+      ['maya_warm', 'afternoon_recharge_10.focus.ogg'],
+      ['maya_warm', 'afternoon_recharge_10.sleep.ogg'],
+      ['maya_warm', 'deep_rest_30.focus.ogg'],
+      ['maya_warm', 'deep_rest_30.sleep.ogg'],
+      ['arjun_deep', 'rapid_reset_5.ogg'],
+      ['arjun_deep', 'afternoon_recharge_10.focus.ogg'],
+      ['arjun_deep', 'afternoon_recharge_10.sleep.ogg'],
+      ['arjun_deep', 'deep_rest_30.focus.ogg'],
+      ['arjun_deep', 'deep_rest_30.sleep.ogg'],
+    ] as const;
+
+    try {
+      for (const [voice, filename] of assets) {
+        const directory = path.join(baseDir, voice);
+        await mkdir(directory, { recursive: true });
+        await writeFile(path.join(directory, filename), `real:${voice}/${filename}`);
+      }
+
+      execFileSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          `import { generatePlaceholders } from './tools/audio/make-placeholders.mjs'; await generatePlaceholders(${JSON.stringify(baseDir)});`,
+        ],
+        { cwd: process.cwd() },
+      );
+
+      for (const [voice, filename] of assets) {
+        await expect(readFile(path.join(baseDir, voice, filename), 'utf8')).resolves.toBe(
+          `real:${voice}/${filename}`,
+        );
+      }
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
   describe('Timeline Builder', () => {
     const mockScript = {
       id: 'rapid_reset_5',

@@ -226,6 +226,41 @@ describe('Entitlement Resolution & Service', () => {
       expect(service.getSnapshot().plan).toBe('lifetime');
     });
 
+    it('grants a persisted 72-hour trial exactly once and expires it without subscription grace', async () => {
+      await service.init();
+      const trial = repo.all().find((row) => row.productId === 'ember_pro_trial');
+      expect(trial?.expiresAtMs).toBe(baseTime + 72 * 60 * 60 * 1000);
+      expect(service.getSnapshot()).toMatchObject({ level: 'pro', plan: 'trial' });
+
+      clock.advance(72 * 60 * 60 * 1000);
+      await service.expireStale();
+      expect(service.getSnapshot().level).toBe('free');
+      expect(repo.hasActivePro(clock.now())).toBe(false);
+      expect(repo.all().filter((row) => row.productId === 'ember_pro_trial')).toHaveLength(1);
+
+      await service.init();
+      expect(repo.all().filter((row) => row.productId === 'ember_pro_trial')).toHaveLength(1);
+    });
+
+    it('gives lifetime and purchased Pro precedence over trial and keeps a free pass independent', async () => {
+      await service.init();
+      repo.grantFreePass('independent-pass', baseTime);
+      await service.expireStale();
+      await service.applyPurchase({
+        status: 'purchased',
+        productId: 'ember_pro_lifetime',
+        orderId: 'MOCK-LIFE',
+        purchaseToken: 'life-token',
+        purchasedAtMs: baseTime,
+      });
+      expect(service.getSnapshot()).toMatchObject({
+        level: 'pro',
+        plan: 'lifetime',
+        passAvailable: true,
+        trialExpiresAtMs: null,
+      });
+    });
+
     it('gates protocols correctly (5m and 10m free, 30m requires Pro or Pass)', () => {
       expect(service.canStartProtocol('rapid_reset_5')).toEqual({ allowed: true, via: 'free' });
       expect(service.canStartProtocol('afternoon_recharge_10')).toEqual({

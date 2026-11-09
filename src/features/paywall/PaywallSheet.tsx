@@ -129,9 +129,9 @@ const COPY_DECK: Record<
 
 const VALUE_PROP_BULLETS = [
   '30-min Deep Rest & Yoga Nidra',
+  'Screen-off background playback',
   'Premium narrator voices & soundscapes',
   'Full history & Calm Delta insights',
-  'Full 30-min restorative night rest',
 ];
 
 export function PaywallSheet() {
@@ -329,6 +329,15 @@ export function PaywallSheet() {
           />
         </View>
 
+        {/* Honest 3-Day Pro Trial Explanation */}
+        <View style={styles.trialInfoBox}>
+          <Text style={styles.trialInfoTitle}>✦ 3-Day Pro Trial Included</Text>
+          <Text style={styles.trialInfoText}>
+            Every install includes 3 full days of Ember Pro. No payment method required upfront, no
+            auto-renewal, and zero obligation. At expiry, you simply return to the free tier.
+          </Text>
+        </View>
+
         {Boolean(inlineMessage) && (
           <View
             style={[
@@ -505,7 +514,28 @@ const styles = StyleSheet.create({
   },
   plansContainer: {
     gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  trialInfoBox: {
+    backgroundColor: 'rgba(245, 158, 11, 0.05)',
+    borderRadius: radii.card,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.2)',
+    padding: spacing.md,
     marginBottom: spacing.lg,
+    gap: 4,
+  },
+  trialInfoTitle: {
+    ...typography.caption,
+    color: colors.accentSoft,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  trialInfoText: {
+    ...typography.body,
+    color: colors.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
   },
   planCard: {
     backgroundColor: colors.surface,

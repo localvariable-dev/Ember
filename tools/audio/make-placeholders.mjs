@@ -8,8 +8,12 @@
  */
 
 import { spawn } from 'node:child_process';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { Buffer } from 'node:buffer';
+
+const PLACEHOLDER_TAG = Buffer.from('EMBER_DEV_PLACEHOLDER_NOT_FOR_RELEASE');
 
 function runFfmpeg(args) {
   return new Promise((resolve, reject) => {
@@ -101,6 +105,13 @@ export async function generatePlaceholders(baseDir = 'assets/audio/voice') {
 
   for (const item of missingSpecs) {
     const fullPath = path.join(baseDir, item.voice, item.file);
+    if (existsSync(fullPath)) {
+      const existingAsset = await readFile(fullPath);
+      if (!existingAsset.includes(PLACEHOLDER_TAG)) {
+        console.log(`✓ Preserved real recording: ${item.voice}/${item.file}`);
+        continue;
+      }
+    }
     await generatePlaceholderOgg(fullPath, item.duration);
     console.log(`✓ Placeholder generated: ${item.voice}/${item.file} (${item.duration}s)`);
   }

@@ -15,13 +15,14 @@ export type AccessLevel = 'pro' | 'free_pass' | 'free';
 
 export interface EntitlementSnapshot {
   level: AccessLevel;
-  plan: 'none' | 'monthly' | 'lifetime';
+  plan: 'none' | 'trial' | 'monthly' | 'lifetime';
   proExpiresAtMs: number | null; // null for lifetime or none
   passAvailable: boolean;
   passExpiresAtMs: number | null;
   passConsumedAtMs: number | null;
   passGrantedCount: number;
   lastVerifiedAtMs: number | null;
+  trialExpiresAtMs: number | null;
 }
 
 export type PaywallVariant =
@@ -39,6 +40,7 @@ export type GateDecision =
 
 export interface EntitlementService {
   init(): Promise<void>;
+  ensureTrial(): Promise<boolean>;
   getSnapshot(): EntitlementSnapshot;
   subscribe(cb: (s: EntitlementSnapshot) => void): Unsubscribe;
   canStartProtocol(id: ProtocolId): GateDecision;
@@ -70,7 +72,9 @@ export function resolveEntitlement(
   let lastVerifiedAtMs: number | null = null;
 
   let activeLifetimeRow: UserEntitlement | null = null;
+  let activeAdminRow: UserEntitlement | null = null;
   let activeSubRow: UserEntitlement | null = null;
+  let activeTrialRow: UserEntitlement | null = null;
   let availablePassRow: UserEntitlement | null = null;
 
   for (const row of rows) {
@@ -101,6 +105,14 @@ export function resolveEntitlement(
       }
     } else if (row.kind === 'subscription') {
       if (row.status === 'active') {
+        if (row.source === 'app' && row.productId === 'ember_pro_admin') {
+          if (row.expiresAtMs === null || nowMs < row.expiresAtMs) activeAdminRow = row;
+          continue;
+        }
+        if (row.productId === 'ember_pro_trial') {
+          if (row.expiresAtMs === null || nowMs < row.expiresAtMs) activeTrialRow = row;
+          continue;
+        }
         const isValidWithGrace =
           row.expiresAtMs === null || nowMs < row.expiresAtMs + OFFLINE_GRACE_MS;
         if (isValidWithGrace) {
@@ -127,6 +139,22 @@ export function resolveEntitlement(
       passConsumedAtMs,
       passGrantedCount,
       lastVerifiedAtMs,
+      trialExpiresAtMs: null,
+    };
+  }
+
+  // Administrator access outranks provider subscriptions and the trial.
+  if (activeAdminRow) {
+    return {
+      level: 'pro',
+      plan: 'lifetime',
+      proExpiresAtMs: activeAdminRow.expiresAtMs,
+      passAvailable,
+      passExpiresAtMs,
+      passConsumedAtMs,
+      passGrantedCount,
+      lastVerifiedAtMs,
+      trialExpiresAtMs: null,
     };
   }
 
@@ -141,10 +169,26 @@ export function resolveEntitlement(
       passConsumedAtMs,
       passGrantedCount,
       lastVerifiedAtMs,
+      trialExpiresAtMs: null,
     };
   }
 
-  // 3. Free Pass available
+  // Trial is a strict 72-hour local grant and has no subscription offline grace.
+  if (activeTrialRow) {
+    return {
+      level: 'pro',
+      plan: 'trial',
+      proExpiresAtMs: activeTrialRow.expiresAtMs,
+      passAvailable,
+      passExpiresAtMs,
+      passConsumedAtMs,
+      passGrantedCount,
+      lastVerifiedAtMs,
+      trialExpiresAtMs: activeTrialRow.expiresAtMs,
+    };
+  }
+
+  // 4. Free Pass available
   if (availablePassRow) {
     return {
       level: 'free_pass',
@@ -155,6 +199,7 @@ export function resolveEntitlement(
       passConsumedAtMs,
       passGrantedCount,
       lastVerifiedAtMs,
+      trialExpiresAtMs: null,
     };
   }
 
@@ -168,5 +213,6 @@ export function resolveEntitlement(
     passConsumedAtMs,
     passGrantedCount,
     lastVerifiedAtMs,
+    trialExpiresAtMs: null,
   };
 }

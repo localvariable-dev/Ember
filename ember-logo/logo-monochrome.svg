@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 850 220" role="img" aria-labelledby="title desc">
+  <title id="title">EMBER monochrome logo</title>
+  <desc id="desc">A single-color EMBER crescent and wordmark for light or dark interfaces.</desc>
+  <g fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round">
+    <path d="M76 130C68 91 88 61 120 55c32-6 63 17 61 56"/>
+  </g>
+  <circle cx="127" cy="128" r="9" fill="currentColor"/>
+  <text x="220" y="142" fill="currentColor" font-family="Avenir Next, Inter, Helvetica Neue, Arial, sans-serif" font-size="72" font-weight="500" letter-spacing="15">EMBER</text>
+</svg>

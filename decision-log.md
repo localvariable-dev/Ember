@@ -34,6 +34,8 @@ This document tracks all significant product, architectural, technical, and engi
 - [ADR-024: CI Release Signing Configuration & Kotlin Inline Module Property Isolation](#adr-024-ci-release-signing-configuration--kotlin-inline-module-property-isolation)
 - [ADR-025: Keystore Validation & Non-Silent Testing Build Debug Signing Fallback](#adr-025-keystore-validation--non-silent-testing-build-debug-signing-fallback)
 - [ADR-026: ARM64-Specific ABI Optimization for Personal Device Testing APKs](#adr-026-arm64-specific-abi-optimization-for-personal-device-testing-apks)
+- [ADR-027: Monotonic Session Timing, Background Access & Local Pro Trial](#adr-027-monotonic-session-timing-background-access--local-pro-trial)
+- [ADR-028: Arjun 10-Minute Bundled Recording Integration](#adr-028-arjun-10-minute-bundled-recording-integration)
 
 ---
 
@@ -816,3 +818,40 @@ This document tracks all significant product, architectural, technical, and engi
   - Personal testing APK size reduced by ~65% (~45 MB vs 127 MB).
   - 100% feature and asset parity preserved.
   - Deterministic artifact naming (`ember-testing-debug-signed.apk` in `ember-testing-apk`).
+
+---
+
+### ADR-027: Monotonic Session Timing, Background Access & Local Pro Trial
+
+- **Date:** 2026-11-09
+- **Status:** Accepted
+- **Context:** Session elapsed-time measurement used a wall-clock source that can jump when device time changes. Native playback status can repeat its end signal, and starting a second session during asynchronous audio preparation could create overlapping session state. Free sessions also continued to rely on background audio behavior intended for Pro. New users had no introductory Pro trial.
+- **Decision:**
+  1. Measure controller elapsed time with a monotonic clock anchored to the current epoch, while continuing to use audio playhead positions for listening progress and persistence.
+  2. Reject overlapping session starts and deduplicate native natural-completion events.
+  3. Pause preroll when the app leaves the foreground and pause active playback for non-Pro users. Preserve the existing Expo Android background-audio service for Pro sessions.
+  4. Grant eligible local installs one persisted Pro trial entitlement with an exact 72-hour expiry and no offline grace. Keep purchased subscription grace at three days, and resolve lifetime/admin/purchased/trial/free-pass precedence centrally.
+  5. Use a SQLite unique index for the local trial row and surface trial expiry in Journey membership UI.
+  6. Dim active Player presentation after 60 seconds to 72% opacity in both modes, then restore on interaction; Sleep mode's existing screen-off allowance remains.
+- **Rationale:** Reuses the existing session, audio, SQLite and entitlement abstractions, retains audio-position-based commits and offline persistence, and adds explicit coverage for clock jumps, pause/resume, all protocol durations, repeated native completion, trial expiry and entitlement precedence.
+- **Architectural Impact:**
+  - Session timing no longer advances from wall-clock changes during an app process lifetime.
+  - Trial eligibility is durable within app data and protected against duplicate initialization. The current offline architecture has no stable server identity, so uninstall/data clearing cannot be detected across reinstalls.
+  - Pro background playback still depends on Expo's configured Android media playback service and platform lifecycle behavior; physical-device verification is required to validate device-specific restrictions.
+
+---
+
+### ADR-028: Arjun 10-Minute Bundled Recording Integration
+
+- **Date:** 2026-11-09
+- **Status:** Accepted
+- **Context:** The 10-minute voice registry already exposed Arjun in both modes, but both packaged tracks were development placeholders. The supplied `Voices/Arjun-10min.wav` is 639.46 seconds while the canonical protocol is fixed at 600 seconds.
+- **Decision:**
+  1. Preserve the supplied WAV unchanged and encode a 600-second, mono 48 kHz Opus delivery copy at 32 kbps for the existing Focus and Sleep asset paths.
+  2. Keep the existing Arjun voice ID, bundled asset keys, audio player, voice picker, and session crossfade path. Use the same single recording for both modes because only one source recording was supplied.
+  3. Regenerate the checked-in asset manifests and make the placeholder generator preserve existing audio assets that lack the development placeholder marker.
+- **Rationale:** Uses the established static Metro asset bundle and player architecture, stays inside the current audio size budget, keeps session completion aligned to ten minutes, and prevents the CI placeholder step from replacing the real recording.
+- **Architectural Impact:**
+  - Arjun's 10-minute track is packaged and hash-verified as a real bundled recording in both modes.
+  - The raw WAV remains unchanged in `Voices/`; 5-minute and 30-minute audio tracks and mappings are unchanged.
+  - Maya's current 10-minute bundled files remain untouched and are still marked as development placeholders in this checkout.

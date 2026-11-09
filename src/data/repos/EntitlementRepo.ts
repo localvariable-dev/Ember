@@ -45,6 +45,17 @@ function mapRow(r: RawEntitlementRow): UserEntitlement {
 export class EntitlementRepo {
   constructor(private db: Db) {}
 
+  grantTrial(id: string, nowMs = Date.now()): boolean {
+    const result = this.db.run(
+      `INSERT OR IGNORE INTO user_entitlements (
+        id, kind, source, product_id, status, granted_at_ms, expires_at_ms,
+        consumed_at_ms, consumed_session_id, order_id, purchase_token, last_verified_at_ms, meta_json
+      ) VALUES (?, 'subscription', 'app', 'ember_pro_trial', 'active', ?, ?, NULL, NULL, NULL, NULL, ?, NULL);`,
+      [id, nowMs, nowMs + 72 * 60 * 60 * 1000, nowMs],
+    );
+    return result.changes > 0;
+  }
+
   all(): UserEntitlement[] {
     const rows = this.db.all<RawEntitlementRow>(
       'SELECT * FROM user_entitlements ORDER BY granted_at_ms DESC;',
@@ -59,7 +70,7 @@ export class EntitlementRepo {
     return row ? mapRow(row) : null;
   }
 
-  hasActivePro(nowMs = Date.now()): boolean {
+  hasActivePro(nowMs = Date.now(), graceMs = 3 * 86_400_000): boolean {
     const lifetime = this.db.first<{ id: string }>(
       `SELECT id FROM user_entitlements WHERE kind = 'lifetime' AND status = 'active' LIMIT 1;`,
     );
@@ -69,9 +80,15 @@ export class EntitlementRepo {
       `SELECT id FROM user_entitlements
        WHERE kind = 'subscription'
          AND status = 'active'
-         AND (expires_at_ms IS NULL OR expires_at_ms > ?)
+         AND (
+           (product_id = 'ember_pro_trial' AND (expires_at_ms IS NULL OR expires_at_ms > ?))
+           OR (source = 'app' AND product_id = 'ember_pro_admin' AND
+             (expires_at_ms IS NULL OR expires_at_ms > ?))
+           OR (COALESCE(product_id, '') NOT IN ('ember_pro_trial', 'ember_pro_admin') AND
+             (expires_at_ms IS NULL OR expires_at_ms + ? > ?))
+         )
        LIMIT 1;`,
-      [nowMs],
+      [nowMs, nowMs, graceMs, nowMs],
     );
     return sub !== null;
   }
@@ -117,9 +134,12 @@ export class EntitlementRepo {
       WHERE kind = 'subscription'
         AND status = 'active'
         AND expires_at_ms IS NOT NULL
-        AND (expires_at_ms + ?) <= ?;
+        AND ((product_id = 'ember_pro_trial' AND expires_at_ms <= ?)
+          OR (source = 'app' AND product_id = 'ember_pro_admin' AND expires_at_ms <= ?)
+          OR (COALESCE(product_id, '') NOT IN ('ember_pro_trial', 'ember_pro_admin')
+            AND (expires_at_ms + ?) <= ?));
       `,
-      [graceMs, nowMs],
+      [nowMs, nowMs, graceMs, nowMs],
     );
     return res.changes;
   }

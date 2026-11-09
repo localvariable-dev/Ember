@@ -28,7 +28,7 @@ export function SessionProvider({
   children: React.ReactNode;
   testController?: SessionController;
 }) {
-  const { sessionRepo, prefsRepo, streakRepo, entitlementRepo } = useDatabase();
+  const { sessionRepo, prefsRepo, streakRepo, entitlementRepo, isPro } = useDatabase();
 
   const controller = useMemo(() => {
     if (testController) return testController;
@@ -62,16 +62,18 @@ export function SessionProvider({
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
       const state = controller.getMachineState();
-      // Sigh Pacer is foreground-only ritual: pause if backgrounded
-      if (nextState !== 'active' && state.stage === 'PREROLL') {
-        controller.pause();
+      if (nextState !== 'active') {
+        // Background playback is available to Pro; free sessions pause without accruing time.
+        if (state.stage === 'PREROLL' || (!isPro && state.stage === 'ACTIVE' && state.isPlaying)) {
+          controller.pauseForBackground();
+        }
       }
     });
 
     return () => {
       subscription.remove();
     };
-  }, [controller]);
+  }, [controller, isPro]);
 
   return <SessionContext.Provider value={{ controller }}>{children}</SessionContext.Provider>;
 }

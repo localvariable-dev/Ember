@@ -7,7 +7,7 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radii, spacing, typography } from '../../design/tokens';
-import { hapticCardSelect } from '../../design/haptics';
+import { hapticAmbientSelect } from '../../design/haptics';
 import type { AmbientBedId } from '../../domain/constants';
 import { useDatabase } from '../../providers/DatabaseProvider';
 import { useSheetStore } from '../../stores/useSheetStore';
@@ -56,7 +56,7 @@ export function AmbientChips({ selectedBedId, onSelectBed }: AmbientChipsProps) 
   }
 
   const handleSelect = (id: AmbientBedId | null) => {
-    hapticCardSelect();
+    hapticAmbientSelect(preferences.hapticsEnabled);
     onSelectBed(id);
 
     // If 6Hz Theta selected for the first time, show 3s headphone hint

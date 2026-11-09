@@ -7,7 +7,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radii, spacing, typography } from '../../design/tokens';
-import { hapticCardSelect, hapticLockedCardTap } from '../../design/haptics';
+import { hapticLockedCardTap, hapticVoiceSelect } from '../../design/haptics';
 import { useDatabase } from '../../providers/DatabaseProvider';
 import { useSheetStore } from '../../stores/useSheetStore';
 import { getActiveSessionController } from '../player/SessionProvider';
@@ -20,13 +20,13 @@ export function VoicePickerSheet() {
 
   const handleSelectVoice = (voiceId: string, isProVoice: boolean) => {
     if (isProVoice && !isPro) {
-      hapticLockedCardTap();
+      hapticLockedCardTap(preferences.hapticsEnabled);
       closeSheet();
       openSheet('paywall', { paywallVariant: 'voice_locked' });
       return;
     }
 
-    hapticCardSelect();
+    hapticVoiceSelect(preferences.hapticsEnabled);
     updatePreferences({ selectedVoiceId: voiceId });
 
     // In-flight narrator switch if a session is actively playing
